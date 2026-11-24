@@ -1,0 +1,11 @@
+parametro,simbolo,valor,unidad,notas
+Masa total en orden de marcha,m,1200,kg,Vehiculo prototipo abierto de demostracion
+Batalla entre ejes,L,2.65,m,Distancia eje delantero a eje trasero
+Altura centro de gravedad,h_CG,0.48,m,Medida sobre plano de rodadura
+Ancho de via medio,t,1.62,m,Via promedio delantera y trasera
+Reparto de pesos estatico delantero,pct_f,45,%,55% sobre eje trasero
+Coeficiente aerodinamico,Cd,0.34,-,Configuracion media carga
+Superficie frontal,A,1.95,m^2,Area proyectada frontal
+Densidad aire estandar,rho,1.225,kg/m^3,Nivel del mar 15 C
+Coeficiente de rodadura,Cr,0.015,-,Asfalto seco de referencia
+Deceleracion maxima frenada,ax_max,1.2,g,Equivalente a 11.772 m/s^2

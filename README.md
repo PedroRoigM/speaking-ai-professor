@@ -10,6 +10,8 @@
 
 [English Overview & Install](#quick-start-2-minutes) · [Architecture](#system-architecture) · [Apple Silicon $0 Setup](#apple-silicon-0-local-neural-studio) · [🇪🇸 Guía Rápida en Español](#-guía-rápida-en-español)
 
+![Speaking AI Professor — Dual-Screen Study Studio](./docs/studio-preview.png)
+
 ---
 
 ## Why I Built This
