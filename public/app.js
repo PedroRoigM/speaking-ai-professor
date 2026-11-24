@@ -20,7 +20,9 @@ const state = {
   ws: null,
   connected: false,
   engine: 'local', // 'local' ($0 Ollama) | 'gemini' (Cloud Live API)
-  micMuted: false,
+  micMuted: true,
+  micActive: false,
+  micRequestedOnConnect: false,
   echoShield: true,
   echoCooldownUntil: 0,
   pttMode: false,
@@ -910,56 +912,119 @@ function flushAllTimelines() {
   flushPlaybackQueue();
 }
 
-// ---------------- Audio Capture (AudioWorklet -> 16kHz PCM) ----------------
-async function startMicCapture() {
-  state.micStream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      channelCount: 1,
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-    },
-  });
-
-  state.captureCtx = new (window.AudioContext || window.webkitAudioContext)();
-  await state.captureCtx.audioWorklet.addModule('/pcm-processor.js');
-
-  const source = state.captureCtx.createMediaStreamSource(state.micStream);
-  state.captureNode = new AudioWorkletNode(state.captureCtx, 'pcm16-capture-processor');
-
-  state.captureNode.port.onmessage = (evt) => {
-    const { pcm16, rms } = evt.data;
-    const isSpeakingOrEcho = state.activeSources.size > 0 || Date.now() < state.echoCooldownUntil;
-    const gatedByEcho = state.echoShield && isSpeakingOrEcho;
-    const scale = state.micMuted || gatedByEcho || (state.pttMode && !state.pttHeld) ? 1 : 1 + Math.min(rms * 4.5, 0.38);
-    $('orbRing').style.transform = `scale(${scale.toFixed(3)})`;
-
-    if (!state.connected || !state.ws || state.ws.readyState !== WebSocket.OPEN) return;
-    if (state.micMuted) return;
-
-    if (state.engine === 'local') {
-      if ($('localSttSelect').value === 'whisper' && state.pttHeld) {
-        state.whisperChunks.push(new Uint8Array(pcm16));
-      }
-      return;
-    }
-
-    if (state.pttMode && !state.pttHeld) return;
-    if (gatedByEcho) return;
-    if (isSpeakingOrEcho && rms < 0.018) return;
-
-    state.ws.send(JSON.stringify({ type: 'audio_in', data: arrayBufferToBase64(pcm16) }));
-  };
-
-  source.connect(state.captureNode);
+// ---------------- Optional Audio Capture (AudioWorklet -> 16kHz PCM · 100% Non-Blocking) ----------------
+function describeMicError(err) {
+  const name = err?.name || '';
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    return 'El navegador bloqueó el micrófono por el origen (abre la app en http://localhost:... para usar micro). Puedes seguir usando el aula y escribir en el chat sin problema.';
+  }
+  if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+    return 'Permiso de micrófono denegado. Puedes escuchar al profesor y escribir tus dudas en el chat con normalidad (si lo habilitas en el navegador, pulsa «Activar micro»).';
+  }
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+    return 'No se detectó ningún micrófono conectado. El aula funciona al 100 % escuchando al profesor y escribiendo en el chat.';
+  }
+  if (name === 'NotReadableError' || name === 'TrackStartError') {
+    return 'El micrófono está ocupado por otra aplicación. Puedes continuar escribiendo por chat o reintentar con «Activar micro».';
+  }
+  return `Micrófono no disponible (${err?.message || name || 'bloqueado'}). Puedes seguir escuchando al profesor y escribiendo por chat.`;
 }
 
-// ---------------- Local Browser SpeechRecognition (Instant $0 STT) ----------------
+function syncMicUi() {
+  const btn = $('muteBtn');
+  if (!btn) return;
+  const liveListening = state.micActive && !state.micMuted;
+  btn.textContent = liveListening ? 'Silenciar' : 'Activar micro';
+  btn.classList.toggle('btn-amber', state.connected && !liveListening && state.micActive);
+  btn.title = liveListening
+    ? 'Silenciar micrófono'
+    : 'Activar micrófono (opcional — el chat de texto siempre funciona)';
+}
+
+async function startMicCapture() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return { ok: false, userMessage: describeMicError({ name: 'InsecureContext' }) };
+  }
+
+  stopMicCapture();
+  try {
+    try {
+      state.micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+    } catch (constraintErr) {
+      // Many Windows Bluetooth/USB mics reject strict channelCount: 1 -> fall back to plain { audio: true }
+      if (['OverconstrainedError', 'ConstraintNotSatisfiedError', 'TypeError', 'NotReadableError'].includes(constraintErr?.name)) {
+        state.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } else {
+        throw constraintErr;
+      }
+    }
+
+    state.captureCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (state.captureCtx.state === 'suspended') {
+      await state.captureCtx.resume().catch(() => {});
+    }
+    if (!state.captureCtx.audioWorklet) {
+      throw new Error('AudioWorklet no soportado en este navegador');
+    }
+    await state.captureCtx.audioWorklet.addModule('/pcm-processor.js');
+
+    const source = state.captureCtx.createMediaStreamSource(state.micStream);
+    state.captureNode = new AudioWorkletNode(state.captureCtx, 'pcm16-capture-processor');
+
+    state.captureNode.port.onmessage = (evt) => {
+      const { pcm16, rms } = evt.data;
+      const isSpeakingOrEcho = state.activeSources.size > 0 || Date.now() < state.echoCooldownUntil;
+      const gatedByEcho = state.echoShield && isSpeakingOrEcho;
+      const scale = state.micMuted || gatedByEcho || (state.pttMode && !state.pttHeld) ? 1 : 1 + Math.min(rms * 4.5, 0.38);
+      $('orbRing').style.transform = `scale(${scale.toFixed(3)})`;
+
+      if (!state.connected || !state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+      if (state.micMuted) return;
+
+      if (state.engine === 'local') {
+        if ($('localSttSelect').value === 'whisper' && state.pttHeld) {
+          state.whisperChunks.push(new Uint8Array(pcm16));
+        }
+        return;
+      }
+
+      if (state.pttMode && !state.pttHeld) return;
+      if (gatedByEcho) return;
+      if (isSpeakingOrEcho && rms < 0.018) return;
+
+      state.ws.send(JSON.stringify({ type: 'audio_in', data: arrayBufferToBase64(pcm16) }));
+    };
+
+    source.connect(state.captureNode);
+    state.micActive = true;
+    state.micMuted = false;
+    syncMicUi();
+    return { ok: true };
+  } catch (err) {
+    stopMicCapture();
+    state.micActive = false;
+    state.micMuted = true;
+    syncMicUi();
+    return { ok: false, error: err, userMessage: describeMicError(err) };
+  }
+}
+
+// ---------------- Optional Local Browser SpeechRecognition (Instant $0 STT · Zero Infinite Loops!) ----------------
 function startLocalBrowserSpeech() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
-    appendTranscript('system', 'Tu navegador no soporta dictado Web Speech. Usa "Offline mlx-whisper" o escribe abajo.');
-    return;
+    state.micActive = false;
+    state.micMuted = true;
+    syncMicUi();
+    appendTranscript('system', 'Este navegador no incluye dictado de voz. Puedes escribir tus dudas por chat o usar Whisper local en Ajustes.');
+    return false;
   }
   stopLocalBrowserSpeech();
   const rec = new SR();
@@ -973,12 +1038,13 @@ function startLocalBrowserSpeech() {
         ? 'es-ES'
         : 'es-ES';
 
+  let fatalBlocked = false;
+
   rec.onresult = (evt) => {
     if (!state.connected || state.engine !== 'local' || state.micMuted) return;
     const isSpeakingOrEcho = state.activeSources.size > 0 || Date.now() < state.echoCooldownUntil;
     const classLecturingNow =
       state.classState.active && !state.classTimelinePaused && !state.classState.paused && !state.classState.qaPaused;
-    // With MacBook speakers (Anti-Echo ON), never let speaker echo self-pause the continuous class between beats/pages!
     if (state.echoShield && (isSpeakingOrEcho || classLecturingNow)) return;
 
     for (let i = evt.resultIndex; i < evt.results.length; i++) {
@@ -995,23 +1061,84 @@ function startLocalBrowserSpeech() {
   };
 
   rec.onerror = (e) => {
-    if (e.error !== 'no-speech' && e.error !== 'aborted') {
-      appendTranscript('system', `Mic dictado: ${e.error}`);
+    const code = e?.error || '';
+    if (code === 'no-speech' || code === 'aborted') return;
+    // Fatal mic errors MUST stop auto-restart immediately so the browser never freezes in a 220ms error loop!
+    if (['not-allowed', 'service-not-allowed', 'audio-capture', 'language-not-supported'].includes(code)) {
+      fatalBlocked = true;
+      state.micActive = false;
+      state.micMuted = true;
+      stopLocalBrowserSpeech();
+      syncMicUi();
+      if (state.connected) setStatus('connected', 'Conectado · Modo texto');
+      const reason =
+        code === 'audio-capture'
+          ? 'No se detectó micrófono disponible.'
+          : 'Permiso de micrófono desactivado en el navegador.';
+      appendTranscript('system', `${reason} Puedes seguir usando la clase, escuchar al profesor y escribir tus dudas por chat (pulsa «Activar micro» cuando quieras reintentarlo).`);
+      return;
     }
+    appendTranscript('system', `Aviso de dictado (${code}). El chat de texto sigue funcionando normalmente.`);
   };
 
   rec.onend = () => {
-    if (state.connected && state.engine === 'local' && $('localSttSelect').value === 'browser' && !state.micMuted) {
+    if (fatalBlocked) return;
+    if (state.connected && state.engine === 'local' && $('localSttSelect').value === 'browser' && state.micActive && !state.micMuted) {
       setTimeout(() => {
         try {
-          if (state.connected && state.speechRec === rec) rec.start();
+          if (!fatalBlocked && state.connected && state.speechRec === rec && state.micActive && !state.micMuted) {
+            rec.start();
+          }
         } catch {}
-      }, 220);
+      }, 260);
     }
   };
 
   state.speechRec = rec;
-  try { rec.start(); } catch {}
+  state.micActive = true;
+  state.micMuted = false;
+  syncMicUi();
+  try {
+    rec.start();
+    return true;
+  } catch (err) {
+    fatalBlocked = true;
+    state.micActive = false;
+    state.micMuted = true;
+    stopLocalBrowserSpeech();
+    syncMicUi();
+    appendTranscript('system', describeMicError(err));
+    return false;
+  }
+}
+
+async function enableMicrophoneOnDemand() {
+  if (!state.connected) {
+    await connectSession({ requestMic: true });
+    return;
+  }
+  const needsRawMic = state.engine === 'gemini' || $('localSttSelect').value === 'whisper';
+  if (needsRawMic) {
+    const res = await startMicCapture();
+    if (res.ok) {
+      if (state.engine === 'local') {
+        state.pttMode = true;
+        $('pttBtn').classList.add('btn-primary');
+        $('pttBtn').textContent = 'Espacio Whisper (ON)';
+      }
+      setStatus('connected', 'Escuchando · Micrófono activo');
+      appendTranscript('system', 'Micrófono activado.');
+    } else {
+      setStatus('connected', 'Conectado · Modo texto');
+      appendTranscript('system', res.userMessage);
+    }
+  } else {
+    const ok = startLocalBrowserSpeech();
+    if (ok) {
+      setStatus('connected', 'Escuchando · Micrófono activo');
+      appendTranscript('system', 'Micrófono de dictado activado.');
+    }
+  }
 }
 
 function stopLocalBrowserSpeech() {
@@ -2108,31 +2235,40 @@ function appendTranscript(role, text, appendToCurrent = false) {
   if (role === 'professor') state.currentProfBubble = { el, body };
 }
 
-// ---------------- WebSocket Session ----------------
-async function connectSession() {
+// ---------------- WebSocket Session (Microphone 100% Optional & Non-Blocking!) ----------------
+async function connectSession({ requestMic = false } = {}) {
   if (state.engine === 'gemini' && !state.hasApiKey) {
     openApiKeyModal();
     return;
   }
 
   ensurePlaybackContext();
+  state.micRequestedOnConnect = Boolean(requestMic);
+  state.micActive = false;
+  state.micMuted = !requestMic;
   setStatus('connecting', state.engine === 'local' ? 'Iniciando profesor local...' : 'Conectando con Gemini Live...');
   $('connectBtn').disabled = true;
 
-  // Avoid opening raw getUserMedia in Local Browser-Speech mode so macOS CoreAudio / AirPods
-  // never switch into VoiceProcessingIO/HFP mode and duck/mute professor playback!
-  const needsRawMic = state.engine === 'gemini' || $('localSttSelect').value === 'whisper';
+  // Only request raw microphone when explicitly asked (never block class startup or text chat!)
+  const needsRawMic = requestMic && (state.engine === 'gemini' || $('localSttSelect').value === 'whisper');
+  let micNotice = '';
   if (needsRawMic) {
-    try {
-      await startMicCapture();
-    } catch (err) {
-      setStatus('error', 'Mic blocked');
-      appendTranscript('system', `Mic warning: ${err.message}. You can still type questions once connected.`);
+    const micRes = await startMicCapture();
+    if (!micRes.ok) {
+      micNotice = micRes.userMessage;
     }
   }
 
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   state.ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+  state.ws.onerror = () => {
+    $('connectBtn').disabled = false;
+    if (!state.connected) {
+      setStatus('error', 'Sin conexión al servidor');
+      appendTranscript('system', 'No se pudo conectar con el servidor local. Comprueba que la terminal sigue abierta.');
+    }
+  };
 
   state.ws.onopen = () => {
     state.ws.send(
@@ -2172,23 +2308,32 @@ async function connectSession() {
       $('interruptBtn').disabled = false;
 
       if (msg.engine === 'local') {
-        if ($('localSttSelect').value === 'browser') {
-          startLocalBrowserSpeech();
-        } else {
-          state.pttMode = true;
-          $('pttBtn').classList.add('btn-primary');
-          $('pttBtn').textContent = 'Espacio Whisper (ON)';
+        if (state.micRequestedOnConnect) {
+          if ($('localSttSelect').value === 'browser') {
+            startLocalBrowserSpeech();
+          } else if (state.micActive) {
+            state.pttMode = true;
+            $('pttBtn').classList.add('btn-primary');
+            $('pttBtn').textContent = 'Espacio Whisper (ON)';
+          }
         }
-        setStatus('connected', 'Escuchando · Modo local');
+        syncMicUi();
+        setStatus('connected', state.micActive && !state.micMuted ? 'Escuchando · Modo local' : 'Conectado · Modo texto');
         appendTranscript('system', `Sesión local ($0) lista: ${msg.model} · ${msg.voice}.`);
       } else {
-        setStatus('connected', 'Escuchando · Pregunta lo que quieras');
+        syncMicUi();
+        setStatus('connected', state.micActive && !state.micMuted ? 'Escuchando · Pregunta lo que quieras' : 'Conectado · Modo texto');
         appendTranscript(
           'system',
           msg.resumed
             ? 'Conexión de clase restaurada.'
             : `Clase en directo iniciada (${msg.folderName} · ${msg.model} · ${msg.voice}).`,
         );
+      }
+
+      if (micNotice) {
+        appendTranscript('system', micNotice);
+        micNotice = '';
       }
 
       if (state.pendingClassStart) {
@@ -2278,6 +2423,9 @@ async function connectSession() {
 function disconnectSession(label = 'Listo') {
   state.connected = false;
   state.connectedMode = null;
+  state.micActive = false;
+  state.micMuted = true;
+  state.micRequestedOnConnect = false;
   state.classState.active = false;
   state.classState.paused = false;
   state.classState.qaPaused = false;
@@ -2295,10 +2443,12 @@ function disconnectSession(label = 'Listo') {
     state.ws = null;
   }
   $('connectBtn').disabled = false;
-  $('connectBtn').textContent = 'Activar voz';
+  $('connectBtn').textContent = 'Conectar';
   $('connectBtn').classList.add('btn-subtle');
   $('connectBtn').classList.remove('btn-danger', 'btn-primary');
   $('muteBtn').disabled = true;
+  $('muteBtn').textContent = 'Activar micro';
+  $('muteBtn').classList.remove('btn-amber');
   $('pttBtn').disabled = true;
   $('interruptBtn').disabled = true;
   setStatus('idle', label);
@@ -2366,7 +2516,7 @@ async function startContinuousClass() {
   }
   if (!state.connected) {
     state.pendingClassStart = req;
-    await connectSession();
+    await connectSession({ requestMic: false });
     return;
   }
   flushPlaybackQueue();
@@ -2552,18 +2702,34 @@ function handlePrimaryStartOrStop() {
   } else if (state.mode === 'continuous_class' && state.pdfs.length) {
     startContinuousClass();
   } else {
-    connectSession();
+    connectSession({ requestMic: true });
   }
 }
 $('connectBtn').addEventListener('click', handlePrimaryStartOrStop);
 $('orbBtn').addEventListener('click', handlePrimaryStartOrStop);
 
-$('muteBtn').addEventListener('click', () => {
+$('muteBtn').addEventListener('click', async () => {
+  if (!state.connected) {
+    await connectSession({ requestMic: true });
+    return;
+  }
+  // If microphone is not active yet (text-only mode or previously blocked), try activating it on demand!
+  if (!state.micActive) {
+    await enableMicrophoneOnDemand();
+    return;
+  }
   state.micMuted = !state.micMuted;
-  $('muteBtn').textContent = state.micMuted ? 'Activar micro' : 'Silenciar';
-  $('muteBtn').classList.toggle('btn-amber', state.micMuted);
-  if (state.micMuted && state.ws?.readyState === WebSocket.OPEN) state.ws.send(JSON.stringify({ type: 'audio_end' }));
-  setStatus('connected', state.micMuted ? 'Conectado (micro silenciado)' : 'Escuchando · Pregunta lo que quieras');
+  if (state.micMuted) {
+    if (state.ws?.readyState === WebSocket.OPEN) state.ws.send(JSON.stringify({ type: 'audio_end' }));
+    if (state.engine === 'local' && $('localSttSelect').value === 'browser') {
+      stopLocalBrowserSpeech();
+      state.micActive = false;
+    }
+  } else if (state.engine === 'local' && $('localSttSelect').value === 'browser' && !state.speechRec) {
+    startLocalBrowserSpeech();
+  }
+  syncMicUi();
+  setStatus('connected', state.micActive && !state.micMuted ? 'Escuchando · Pregunta lo que quieras' : 'Conectado · Modo texto');
 });
 
 $('pttBtn').addEventListener('click', () => {
@@ -2787,7 +2953,7 @@ async function sendPromptText(txt) {
   ensurePlaybackContext();
   if (!state.connected) {
     state.pendingPrompt = txt;
-    await connectSession();
+    await connectSession({ requestMic: false });
     return;
   }
   if (state.classState.active && !state.classTimelinePaused) {
@@ -2951,7 +3117,7 @@ function renderWelcomeBoard() {
         <button type="button" class="btn btn-primary" id="welcomeVoiceBtn">Activar voz</button>
       </div>
     `;
-    card.querySelector('#welcomeVoiceBtn').addEventListener('click', connectSession);
+    card.querySelector('#welcomeVoiceBtn').addEventListener('click', () => connectSession({ requestMic: false }));
     launchSlot.appendChild(card);
   }
 
