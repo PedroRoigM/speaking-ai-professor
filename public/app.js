@@ -147,6 +147,39 @@ function applyRailState(side, collapsed) {
   });
 })();
 
+// Unified Settings Modal & Audio Tray Popover
+(() => {
+  const modal = $('settingsModal');
+  const openSettings = () => modal?.classList.add('open');
+  const closeSettings = () => modal?.classList.remove('open');
+  $('openSettingsBtn')?.addEventListener('click', openSettings);
+  $('closeSettingsBtn')?.addEventListener('click', closeSettings);
+  $('doneSettingsBtn')?.addEventListener('click', closeSettings);
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) closeSettings();
+  });
+
+  // Also close API Key & Folder modals on backdrop click
+  ['apiKeyModal', 'folderModal'].forEach((id) => {
+    const m = $(id);
+    m?.addEventListener('click', (e) => {
+      if (e.target === m) m.classList.remove('open');
+    });
+  });
+
+  // Micro audio options tray inside right rail
+  const audioBtn = $('audioMenuBtn');
+  const audioTray = $('audioTray');
+  audioBtn?.addEventListener('click', () => {
+    if (!audioTray) return;
+    const isHidden = audioTray.hasAttribute('hidden');
+    if (isHidden) audioTray.removeAttribute('hidden');
+    else audioTray.setAttribute('hidden', '');
+    audioBtn.classList.toggle('active', isHidden);
+    audioBtn.setAttribute('aria-expanded', String(isHidden));
+  });
+})();
+
 // ---------------- Utilities ----------------
 function setStatus(visualState, text) {
   $('statusPill').dataset.state = visualState;
@@ -1680,24 +1713,14 @@ function pushScene(scene, { pacingMs = 0 } = {}) {
 function renderFilmstrip() {
   const strip = $('sceneFilmstrip');
   if (!state.scenes.length) {
-    strip.innerHTML = '<span style="font-size:11.5px; color:var(--text-dim);">Pizarras, problemas resueltos y laboratorios aparecerán aquí...</span>';
+    strip.innerHTML = '';
     return;
   }
   strip.innerHTML = '';
   state.scenes.forEach((sc, idx) => {
     const btn = document.createElement('button');
     btn.className = `scene-tab${state.stageSurface !== 'pdf' && idx === state.activeSceneIdx ? ' active' : ''}`;
-    const icon =
-      sc.kind === 'problem_board'
-        ? '🧮'
-        : sc.kind === 'live_scene'
-          ? '✏️'
-          : sc.kind === 'lab'
-            ? '🧪'
-            : sc.kind === 'quiz'
-              ? '❓'
-              : '📐';
-    btn.textContent = `${idx + 1}. ${icon} ${sc.title.slice(0, 28)}`;
+    btn.textContent = `${idx + 1}. ${sc.title.slice(0, 30)}`;
     btn.addEventListener('click', () => showScene(idx, false));
     strip.appendChild(btn);
   });
@@ -1974,8 +1997,8 @@ async function connectSession() {
       state.connected = true;
       state.connectedMode = state.mode;
       $('connectBtn').disabled = false;
-      $('connectBtn').textContent = 'Finalizar';
-      $('connectBtn').classList.remove('btn-primary');
+      $('connectBtn').textContent = 'Detener';
+      $('connectBtn').classList.remove('btn-subtle', 'btn-primary');
       $('connectBtn').classList.add('btn-danger');
       $('muteBtn').disabled = false;
       $('pttBtn').disabled = false;
@@ -2101,9 +2124,9 @@ function disconnectSession(label = 'Listo') {
     state.ws = null;
   }
   $('connectBtn').disabled = false;
-  $('connectBtn').textContent = 'Iniciar voz';
-  $('connectBtn').classList.add('btn-primary');
-  $('connectBtn').classList.remove('btn-danger');
+  $('connectBtn').textContent = 'Activar voz';
+  $('connectBtn').classList.add('btn-subtle');
+  $('connectBtn').classList.remove('btn-danger', 'btn-primary');
   $('muteBtn').disabled = true;
   $('pttBtn').disabled = true;
   $('interruptBtn').disabled = true;
@@ -2135,7 +2158,7 @@ function populatePdfSelector(pdfs) {
   for (const p of state.pdfs) {
     const opt = document.createElement('option');
     opt.value = p.id;
-    opt.textContent = `${p.name} (${p.pageCount} págs.)`;
+    opt.textContent = `${p.name} · ${p.pageCount}p`;
     sel.appendChild(opt);
   }
   if (prev && state.pdfs.some((p) => p.id === prev)) {
@@ -2458,6 +2481,12 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (e.code === 'Escape') {
+    const openModal = document.querySelector('.modal-backdrop.open');
+    if (openModal) {
+      e.preventDefault();
+      openModal.classList.remove('open');
+      return;
+    }
     if (state.connected && (state.activeSources.size > 0 || state.classState.active)) {
       e.preventDefault();
       triggerInterrupt();
@@ -2682,57 +2711,77 @@ function renderWelcomeBoard() {
   const box = document.createElement('div');
   box.className = 'empty-board';
   box.id = 'emptyBoard';
-  const folderTitle = dp ? dp.folderName : 'Tu estudio está listo';
+  const folderTitle = dp ? dp.folderName : 'Tu aula interactiva está lista';
   const activeCount = dp?.activeFiles || 0;
+  const firstPdf = state.pdfs[0];
+
   box.innerHTML = `
-    <h2>${escapeHtml(folderTitle)}</h2>
-    <p>
-      Hemos indexado <strong>${activeCount} ${activeCount === 1 ? 'archivo' : 'archivos'}</strong> de tu carpeta para explicar el temario con rigor y claridad, combinando tus apuntes con una pizarra guiada paso a paso.
-    </p>
-    <div class="welcome-steps">
-      <div class="welcome-step">
-        <span class="welcome-step-num">1</span>
-        <strong>Elige tus apuntes</strong>
-        <span>Selecciona un PDF y la página de inicio en el panel izquierdo.</span>
-      </div>
-      <div class="welcome-step">
-        <span class="welcome-step-num">2</span>
-        <strong>Inicia la clase</strong>
-        <span>El PDF se proyecta a la izquierda y la pizarra dibuja esquemas a la derecha.</span>
-      </div>
-      <div class="welcome-step">
-        <span class="welcome-step-num">3</span>
-        <strong>Interactúa sin fricción</strong>
-        <span>Habla, escribe o rodea cualquier parte en pantalla para resolver dudas al instante.</span>
-      </div>
+    <div class="welcome-context-pill">
+      <span class="welcome-context-dot" aria-hidden="true"></span>
+      <span>${activeCount} ${activeCount === 1 ? 'fuente indexada' : 'fuentes indexadas'}</span>
     </div>
-    <div class="welcome-cta-row" id="welcomeCtaRow"></div>
-    <div class="welcome-starters-label" id="welcomeStartersLabel" style="display:none;">O empieza preguntando directamente:</div>
+    <h1>${escapeHtml(folderTitle)}</h1>
+    <p>
+      Proyecta tus apuntes a la izquierda mientras el profesor explica en voz alta y dibuja esquemas y fórmulas paso a paso a la derecha.
+    </p>
+    <div id="welcomeLaunchSlot"></div>
+    <div class="welcome-starters-label" id="welcomeStartersLabel" style="display:none;">O empieza con una pregunta directa</div>
     <div class="starter-chips" id="starterChips"></div>
   `;
 
-  const ctaRow = box.querySelector('#welcomeCtaRow');
-  if (state.pdfs.length) {
-    const primaryBtn = document.createElement('button');
-    primaryBtn.className = 'btn btn-primary';
-    primaryBtn.textContent = `Iniciar clase con ${state.pdfs[0].name}`;
-    primaryBtn.addEventListener('click', startContinuousClass);
-    ctaRow.appendChild(primaryBtn);
-
-    const previewBtn = document.createElement('button');
-    previewBtn.className = 'btn';
-    previewBtn.textContent = 'Abrir PDF y pantalla completa';
-    previewBtn.addEventListener('click', () => {
+  const launchSlot = box.querySelector('#welcomeLaunchSlot');
+  if (firstPdf) {
+    const card = document.createElement('div');
+    card.className = 'welcome-launch-card';
+    card.innerHTML = `
+      <div class="welcome-launch-doc">
+        <div class="welcome-doc-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+        </div>
+        <div class="welcome-doc-meta">
+          <div class="welcome-doc-name">${escapeHtml(firstPdf.name)}</div>
+          <div class="welcome-doc-sub">${firstPdf.pageCount || 1} páginas · Doble pantalla sincronizada</div>
+        </div>
+      </div>
+      <div class="welcome-launch-actions">
+        <button type="button" class="btn btn-primary" id="welcomeStartBtn">Empezar clase</button>
+        <button type="button" class="btn btn-subtle" id="welcomeFsBtn" title="Iniciar en pantalla completa">Pantalla completa</button>
+      </div>
+    `;
+    card.querySelector('#welcomeStartBtn').addEventListener('click', startContinuousClass);
+    card.querySelector('#welcomeFsBtn').addEventListener('click', () => {
       startContinuousClass();
       toggleClassroomFullscreen(true);
     });
-    ctaRow.appendChild(previewBtn);
+    launchSlot.appendChild(card);
   } else {
-    const startVoiceBtn = document.createElement('button');
-    startVoiceBtn.className = 'btn btn-primary';
-    startVoiceBtn.textContent = 'Iniciar sesión de voz';
-    startVoiceBtn.addEventListener('click', connectSession);
-    ctaRow.appendChild(startVoiceBtn);
+    const card = document.createElement('div');
+    card.className = 'welcome-launch-card';
+    card.innerHTML = `
+      <div class="welcome-launch-doc">
+        <div class="welcome-doc-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" x2="12" y1="19" y2="22"/>
+          </svg>
+        </div>
+        <div class="welcome-doc-meta">
+          <div class="welcome-doc-name">Sesión interactiva por voz y pizarra</div>
+          <div class="welcome-doc-sub">Sube un PDF a la izquierda o empieza hablando directamente</div>
+        </div>
+      </div>
+      <div class="welcome-launch-actions">
+        <button type="button" class="btn btn-primary" id="welcomeVoiceBtn">Activar voz</button>
+      </div>
+    `;
+    card.querySelector('#welcomeVoiceBtn').addEventListener('click', connectSession);
+    launchSlot.appendChild(card);
   }
 
   const chipBox = box.querySelector('#starterChips');
@@ -2856,6 +2905,7 @@ dropzone.addEventListener('drop', (e) => {
 
 // ---------------- API Key Modal ----------------
 function openApiKeyModal() {
+  $('settingsModal')?.classList.remove('open');
   $('apiKeyModal').classList.add('open');
   $('apiKeyInput').focus();
 }
@@ -2986,9 +3036,9 @@ function applyEngineUi(engine) {
   updateEngineSummaryBadge();
   if (!state.connected) {
     if (engine === 'local') {
-      setStatus('idle', state.ollama.running ? 'Listo · Local $0' : 'Inicia Ollama para modo local');
+      setStatus('idle', state.ollama.running ? 'Listo' : 'Ollama inactivo');
     } else {
-      setStatus('idle', state.hasApiKey ? 'Listo · Gemini Cloud' : 'Añade tu clave de Gemini');
+      setStatus('idle', state.hasApiKey ? 'Listo' : 'Falta API Key');
     }
   }
 }

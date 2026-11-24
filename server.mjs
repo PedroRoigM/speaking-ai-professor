@@ -89,6 +89,8 @@ const MIME_TYPES = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
 };
 
 let runtimeApiKey = process.env.GEMINI_API_KEY || '';

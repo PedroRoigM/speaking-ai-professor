@@ -3,35 +3,37 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Profesor IA — Estudio y Pizarra en Vivo</title>
+  <title>Profesor IA — Aula Interactiva</title>
+  <link rel="stylesheet" href="/fonts/fonts.css" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <div class="app-shell" id="appShell">
-    <!-- Top Header -->
+    <!-- Minimal Single-Row Studio Header -->
     <header class="topbar">
       <div class="brand">
-        <button id="toggleLeftRailBtn" class="icon-btn active" title="Mostrar u ocultar panel de estudio" aria-label="Mostrar u ocultar panel de estudio" aria-pressed="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <button id="toggleLeftRailBtn" class="icon-btn active" title="Mostrar u ocultar panel de fuentes" aria-label="Mostrar u ocultar panel de fuentes" aria-pressed="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="3" y="4" width="18" height="16" rx="2.5"/>
             <line x1="9" y1="4" x2="9" y2="20"/>
           </svg>
         </button>
 
         <div class="brand-mark" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M2 7.5 12 3l10 4.5-10 4.5L2 7.5Z"/>
-            <path d="M6 9.5v5.8c0 1.4 2.7 2.7 6 2.7s6-1.3 6-2.7V9.5"/>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 8.5 12 4l10 4.5L12 13 2 8.5Z"/>
+            <path d="M6 10.5v5.2c0 1.4 2.7 2.8 6 2.8s6-1.4 6-2.8v-5.2"/>
           </svg>
         </div>
 
         <span class="brand-title">Profesor IA</span>
+        <span class="brand-sep" aria-hidden="true">/</span>
 
-        <button id="folderBadgeBtn" class="expert-pill" title="Haz clic para cambiar la carpeta de estudio">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
-          </svg>
+        <button id="folderBadgeBtn" class="breadcrumb-btn" title="Cambiar carpeta de estudio">
           <span id="folderBadgeText">Cargando carpeta...</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
         </button>
       </div>
 
@@ -41,25 +43,32 @@
           <span id="statusText">Listo</span>
         </div>
 
-        <!-- 3-Way Cognitive Ergonomic Theme Switcher -->
-        <div id="themeSwitcher" class="theme-switcher" role="group" aria-label="Tema visual de estudio">
-          <button type="button" class="theme-opt active" data-theme-opt="light" title="Papel cálido: máximo descanso visual de día">Papel</button>
-          <button type="button" class="theme-opt" data-theme-opt="sepia" title="Lectura sepia: luz azul mínima para sesiones largas">Sepia</button>
-          <button type="button" class="theme-opt" data-theme-opt="dark" title="Noche slate: oscuro suave sin halación">Noche</button>
+        <!-- 3-Theme Switcher: Claro Studio · Papel Lectura · Noche Obsidian -->
+        <div id="themeSwitcher" class="segmented-mini" role="group" aria-label="Tema visual">
+          <button type="button" class="theme-opt active" data-theme-opt="light" title="Claro Studio: alta nitidez y mínimo ruido">Claro</button>
+          <button type="button" class="theme-opt" data-theme-opt="sepia" title="Papel Lectura: tono cálido de baja luz azul">Papel</button>
+          <button type="button" class="theme-opt" data-theme-opt="dark" title="Noche Obsidian: oscuro suave sin halación">Noche</button>
         </div>
 
-        <button id="topbarFullscreenBtn" class="btn btn-sm btn-primary" title="Abrir aula en pantalla completa con 2 pantallas: PDF y Pizarra [Tecla F]">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <button id="openSettingsBtn" class="btn btn-sm btn-subtle" title="Configurar motor IA, modelos, voz e idioma">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+          </svg>
+          <span id="engineSummaryBadge">Ajustes</span>
+        </button>
+
+        <button id="exportBtn" class="btn btn-sm btn-ghost" title="Exportar apuntes y pizarras como HTML sin conexión">Exportar</button>
+
+        <button id="topbarFullscreenBtn" class="btn btn-sm btn-subtle" title="Aula en pantalla completa con 2 pantallas [Tecla F]">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
           </svg>
           <span>Pantalla completa</span>
         </button>
 
-        <button id="exportBtn" class="btn btn-sm" title="Exportar pizarras, fórmulas y transcripción en un HTML sin conexión">Exportar</button>
-        <button id="apiKeyBtn" class="btn btn-sm" title="Configurar clave de Gemini API">API Key</button>
-
-        <button id="toggleRightRailBtn" class="icon-btn active" title="Mostrar u ocultar panel de voz y chat" aria-label="Mostrar u ocultar panel de voz y chat" aria-pressed="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <button id="toggleRightRailBtn" class="icon-btn active" title="Mostrar u ocultar conversación" aria-label="Mostrar u ocultar conversación" aria-pressed="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="3" y="4" width="18" height="16" rx="2.5"/>
             <line x1="15" y1="4" x2="15" y2="20"/>
           </svg>
@@ -67,21 +76,21 @@
       </div>
     </header>
 
-    <!-- 3-Column Calm Study Studio -->
+    <!-- 3-Column Atelier Workspace -->
     <div class="workspace-grid" id="workspaceGrid">
-      <!-- Left Rail: Clear Quick Start + Progressive Disclosure -->
-      <aside class="panel left-panel" aria-label="Configuración de clase">
+      <!-- Left Rail: Frameless NotebookLM-style Class Launcher & Sources -->
+      <aside class="panel left-panel" aria-label="Fuentes y clase">
         <div class="panel-scroll">
-          <!-- Primary Action Card: Zero-friction PDF Class Start -->
-          <div class="class-setup-box" id="classSetupBox">
-            <div class="section-head">
-              <h2 class="section-label">Clase sobre PDF</h2>
-              <span id="pdfCountBadge" class="meta-badge">0 PDFs</span>
+          <!-- Primary Action Block (THE ONE Primary CTA) -->
+          <section class="rail-section" id="classSetupBox">
+            <div class="rail-head">
+              <h2 class="rail-label">Clase guiada</h2>
+              <span id="pdfCountBadge" class="rail-count">0 PDFs</span>
             </div>
 
             <div class="field">
-              <label for="classPdfSelect">Documento de estudio</label>
-              <select id="classPdfSelect"></select>
+              <label for="classPdfSelect" class="sr-only">Documento PDF</label>
+              <select id="classPdfSelect" aria-label="Documento PDF"></select>
             </div>
 
             <div class="field-row-compact">
@@ -90,225 +99,173 @@
                 <input id="classStartPage" type="number" min="1" value="1" />
               </div>
               <div class="field">
-                <label for="classStartTopic">O ir a un tema</label>
-                <input id="classStartTopic" type="text" placeholder="ej. Centro de gravedad" />
+                <label for="classStartTopic">Tema (opcional)</label>
+                <input id="classStartTopic" type="text" placeholder="ej. Inercias" />
               </div>
             </div>
 
             <div class="cta-row">
               <button id="startContinuousClassBtn" class="btn btn-primary cta-main">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <polygon points="6,4 20,12 6,20"/>
                 </svg>
-                <span>Iniciar clase</span>
+                <span>Empezar clase</span>
               </button>
-              <button id="previewPdfBtn" class="btn" title="Abrir esta página del PDF ahora">Ver PDF</button>
+              <button id="previewPdfBtn" class="btn btn-subtle" title="Previsualizar esta página del PDF">Ver</button>
             </div>
-          </div>
+          </section>
 
-          <!-- Teaching Style Selector -->
-          <div class="section-block">
-            <div class="section-head">
-              <h2 class="section-label">Estilo de clase</h2>
+          <hr class="rail-divider" />
+
+          <!-- Frameless Teaching Style List -->
+          <section class="rail-section">
+            <div class="rail-head">
+              <h2 class="rail-label">Modo de estudio</h2>
             </div>
-            <div class="mode-grid" id="modeGrid">
-              <button class="mode-btn mode-btn-wide" data-mode="continuous_class">
-                <span class="mode-title">Clase continua (PDF + Pizarra)</span>
-                <small>Diapositiva a la izquierda y pizarra guiada a la derecha</small>
+            <div class="mode-list" id="modeGrid">
+              <button class="mode-btn" data-mode="continuous_class">
+                <span class="mode-dot" aria-hidden="true"></span>
+                <span class="mode-copy">
+                  <span class="mode-title">Clase continua</span>
+                  <small>PDF y pizarra sincronizados</small>
+                </span>
               </button>
               <button class="mode-btn active" data-mode="folder_expert">
-                <span class="mode-title">Experto</span>
-                <small>Adapta tu temario</small>
+                <span class="mode-dot" aria-hidden="true"></span>
+                <span class="mode-copy">
+                  <span class="mode-title">Experto en apuntes</span>
+                  <small>Responde según tu carpeta</small>
+                </span>
               </button>
               <button class="mode-btn" data-mode="socratic">
-                <span class="mode-title">Socrático</span>
-                <small>Guía con preguntas</small>
+                <span class="mode-dot" aria-hidden="true"></span>
+                <span class="mode-copy">
+                  <span class="mode-title">Tutor socrático</span>
+                  <small>Te guía con preguntas</small>
+                </span>
               </button>
               <button class="mode-btn" data-mode="lecturer">
-                <span class="mode-title">Pizarra visual</span>
-                <small>Esquemas y fórmulas</small>
+                <span class="mode-dot" aria-hidden="true"></span>
+                <span class="mode-copy">
+                  <span class="mode-title">Pizarra visual</span>
+                  <small>Esquemas y demostraciones</small>
+                </span>
               </button>
               <button class="mode-btn" data-mode="exam">
-                <span class="mode-title">Modo examen</span>
-                <small>Práctica y evaluación</small>
+                <span class="mode-dot" aria-hidden="true"></span>
+                <span class="mode-copy">
+                  <span class="mode-title">Simulacro de examen</span>
+                  <small>Defensa oral y evaluación</small>
+                </span>
               </button>
             </div>
-          </div>
+          </section>
 
-          <!-- Progressive Disclosure Drawer 1: AI Engine, Voice & Language -->
-          <details class="studio-drawer" id="engineDrawer">
-            <summary class="drawer-summary">
-              <span class="drawer-title">
-                <svg class="drawer-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <polyline points="9 18 15 12 9 6"/>
+          <hr class="rail-divider" />
+
+          <!-- NotebookLM-Style Sources Section -->
+          <section class="rail-section rail-section-grow">
+            <div class="rail-head">
+              <h2 class="rail-label">Fuentes</h2>
+              <span id="fileCountBadge" class="rail-count">0</span>
+            </div>
+
+            <div class="source-tools">
+              <button id="screenShareBtn" class="btn btn-xs btn-subtle" style="flex:1;" title="Comparte tu pantalla para que el profesor la vea">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="2" y="3" width="20" height="14" rx="2"/>
+                  <line x1="8" y1="21" x2="16" y2="21"/>
+                  <line x1="12" y1="17" x2="12" y2="21"/>
                 </svg>
-                <span>Motor IA y voz</span>
-              </span>
-              <span id="engineSummaryBadge" class="drawer-badge">Local $0</span>
-            </summary>
+                <span>Pantalla</span>
+              </button>
+              <button id="attachImageBtn" class="btn btn-xs btn-subtle" style="flex:1;" title="Envía una imagen o foto de un problema">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+                <span>Imagen</span>
+              </button>
+              <input id="imageInput" type="file" accept="image/*" hidden />
+            </div>
 
-            <div class="drawer-body">
-              <div class="mode-grid" id="engineGrid" style="margin-bottom:12px;">
-                <button class="mode-btn active" data-engine="local">
-                  <span class="mode-title">Local gratis</span>
-                  <small>Ollama · Sin coste</small>
-                </button>
-                <button class="mode-btn" data-engine="gemini">
-                  <span class="mode-title">Gemini Cloud</span>
-                  <small>Voz en directo</small>
-                </button>
-              </div>
-
-              <!-- Local Ollama Controls -->
-              <div id="localEngineFields">
-                <div class="field">
-                  <label for="localModelSelect">Modelo local <span id="ollamaBadge" class="inline-status"></span></label>
-                  <select id="localModelSelect"></select>
-                </div>
-                <div id="quickPullBar" class="quick-pull-bar"></div>
-                <div id="pullProgress" class="pull-progress" style="display:none;"></div>
-                <div class="field">
-                  <label for="localVoiceSelect">Voz del profesor <span id="voiceCapBadge" class="inline-status"></span></label>
-                  <select id="localVoiceSelect"></select>
-                </div>
-                <div class="field">
-                  <label for="localSttSelect">Reconocimiento de voz</label>
-                  <select id="localSttSelect">
-                    <option value="browser" selected>Micrófono del navegador (Instantáneo)</option>
-                    <option value="whisper">Whisper local sin conexión (Espacio)</option>
-                  </select>
-                </div>
-                <label class="checkbox-field">
-                  <input id="localThinkCheck" type="checkbox" />
-                  <span>Razonamiento profundo (&lt;think&gt; · más lento)</span>
-                </label>
-              </div>
-
-              <!-- Cloud Gemini Live Controls -->
-              <div id="geminiEngineFields" style="display:none;">
-                <div class="field">
-                  <label for="modelSelect">Gemini Live (Voz en directo)</label>
-                  <select id="modelSelect"></select>
-                </div>
-                <div class="field">
-                  <label for="geminiClassModelSelect">Gemini Clase (PDF y Pizarra)</label>
-                  <select id="geminiClassModelSelect"></select>
-                </div>
-                <div class="field" id="thinkingField" style="display:none;">
-                  <label for="thinkingSelect">Profundidad de razonamiento</label>
-                  <select id="thinkingSelect">
-                    <option value="low">Ligero — Consulta rápida</option>
-                    <option value="medium" selected>Medio — Resolución guiada</option>
-                    <option value="high">Alto — Demostraciones complejas</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label for="voiceSelect">Voz de Gemini</label>
-                  <select id="voiceSelect"></select>
-                </div>
-              </div>
-
-              <div class="field">
-                <label for="langSelect">Idioma</label>
-                <select id="langSelect">
-                  <option value="auto" selected>Automático (según apuntes)</option>
-                  <option value="es">Español (Castellano)</option>
-                  <option value="en">English</option>
-                </select>
-              </div>
-
-              <div class="field" style="margin-bottom:0;">
-                <label for="topicInput">Enfoque de hoy (opcional)</label>
-                <input id="topicInput" type="text" placeholder="ej. tema 3, Steiner, repaso examen..." />
+            <div id="visionBox" class="vision-box">
+              <video id="screenVideo" autoplay playsinline muted></video>
+              <div class="vision-controls">
+                <button id="snapFrameBtn" class="btn btn-xs btn-primary" style="flex:1;">Enviar captura</button>
+                <button id="stopScreenBtn" class="btn btn-xs btn-danger">Detener</button>
               </div>
             </div>
-          </details>
 
-          <!-- Progressive Disclosure Drawer 2: Study Library & Screen Share -->
-          <details class="studio-drawer" id="libraryDrawer">
-            <summary class="drawer-summary">
-              <span class="drawer-title">
-                <svg class="drawer-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <polyline points="9 18 15 12 9 6"/>
-                </svg>
-                <span>Biblioteca y pantalla</span>
-              </span>
-              <span id="fileCountBadge" class="drawer-badge">0</span>
-            </summary>
-
-            <div class="drawer-body">
-              <div class="share-row">
-                <button id="screenShareBtn" class="btn btn-sm" style="flex:1;">Compartir pantalla</button>
-                <button id="attachImageBtn" class="btn btn-sm" style="flex:1;">Subir imagen</button>
-                <input id="imageInput" type="file" accept="image/*" hidden />
-              </div>
-
-              <div id="visionBox" class="vision-box">
-                <video id="screenVideo" autoplay playsinline muted></video>
-                <div class="vision-controls">
-                  <button id="snapFrameBtn" class="btn btn-sm btn-primary" style="flex:1;">Enviar captura</button>
-                  <button id="stopScreenBtn" class="btn btn-sm btn-danger">Detener</button>
-                </div>
-              </div>
-
-              <div id="dropzone" class="dropzone" tabindex="0">
-                Arrastra aquí PDF, PPTX, XLSX, DOCX o MD
-                <input id="fileInput" type="file" accept=".pdf,.pptx,.xlsx,.docx,.md,.txt,.html,.htm,.csv" multiple hidden />
-              </div>
-              <div id="fileList" class="file-list"></div>
+            <div id="dropzone" class="dropzone" tabindex="0">
+              <span>+ Añadir PDF, PPTX, XLSX o notas</span>
+              <input id="fileInput" type="file" accept=".pdf,.pptx,.xlsx,.docx,.md,.txt,.html,.htm,.csv" multiple hidden />
             </div>
-          </details>
+
+            <div id="fileList" class="file-list"></div>
+          </section>
         </div>
       </aside>
 
-      <!-- Center Stage: PDF Projector + Live Chalkboard + Interactive Labs -->
-      <main class="panel center-panel">
-        <div class="stage-toolbar">
+      <!-- Center Stage: Expansive Canvas + Contextual Single Toolbar -->
+      <main class="panel center-panel" id="centerPanel">
+        <!-- Contextual Stage Bar (appears cleanly once PDF/board content is active) -->
+        <div class="stage-toolbar" id="stageToolbar">
           <div class="stage-heading">
             <span class="stage-title" id="stageHeaderTitle">Mesa de estudio</span>
           </div>
           <div class="stage-tools">
-            <button id="replayDrawBtn" class="btn btn-sm" disabled title="Repetir la animación paso a paso del dibujo">Repetir dibujo</button>
-            <button id="toggleInkBtn" class="btn btn-sm" title="Rodea o señala cualquier zona de la pizarra o PDF para preguntar al profesor">Señalar / Dibujar</button>
+            <button id="replayDrawBtn" class="btn btn-xs btn-ghost" disabled title="Repetir animación del dibujo">Repetir</button>
+            <button id="toggleInkBtn" class="btn btn-xs btn-subtle" title="Rodea cualquier zona para preguntar al profesor">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 20h9"/>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+              </svg>
+              <span>Señalar</span>
+            </button>
             <div id="penDots" class="pen-dots">
-              <button class="pen-dot active" data-color="#e11d48" style="background:#e11d48;" title="Lápiz carmesí"></button>
-              <button class="pen-dot" data-color="#d97706" style="background:#d97706;" title="Lápiz ámbar"></button>
-              <button class="pen-dot" data-color="#2563eb" style="background:#2563eb;" title="Lápiz azul"></button>
+              <button class="pen-dot active" data-color="#be123c" style="background:#be123c;" title="Lápiz carmesí"></button>
+              <button class="pen-dot" data-color="#b45309" style="background:#b45309;" title="Lápiz ámbar"></button>
+              <button class="pen-dot" data-color="#1d4ed8" style="background:#1d4ed8;" title="Lápiz azul"></button>
             </div>
-            <button id="sendSketchBtn" class="btn btn-sm btn-emerald" style="display:none;">Enviar trazo</button>
-            <button id="clearInkBtn" class="btn btn-sm" style="display:none;">Borrar tinta</button>
-            <button id="clearBoardBtn" class="btn btn-sm">Limpiar</button>
+            <button id="sendSketchBtn" class="btn btn-xs btn-emerald" style="display:none;">Enviar trazo</button>
+            <button id="clearInkBtn" class="btn btn-xs btn-ghost" style="display:none;">Borrar tinta</button>
+            <button id="clearBoardBtn" class="btn btn-xs btn-ghost">Limpiar</button>
           </div>
         </div>
 
-        <!-- Live Class & Dual-Screen Classroom Control Bar -->
+        <!-- Contextual Classroom Playback & Dual-Screen Bar -->
         <div id="classBar" class="class-bar">
           <div class="class-bar-left">
-            <div class="surface-switch" role="tablist" aria-label="Diseño del aula">
-              <button id="surfaceSplitBtn" class="surface-tab active" data-surface="split" title="PDF a la izquierda y Pizarra Viva a la derecha">Doble pantalla</button>
-              <button id="surfacePdfBtn" class="surface-tab" data-surface="pdf" title="Ver solo el documento PDF">Solo PDF</button>
-              <button id="surfaceCanvasBtn" class="surface-tab" data-surface="canvas" title="Ver solo la pizarra">Solo pizarra</button>
+            <div class="segmented-mini" role="tablist" aria-label="Vista del aula">
+              <button id="surfaceSplitBtn" class="surface-tab active" data-surface="split" title="PDF a la izquierda y pizarra a la derecha">Doble</button>
+              <button id="surfacePdfBtn" class="surface-tab" data-surface="pdf" title="Solo documento PDF">PDF</button>
+              <button id="surfaceCanvasBtn" class="surface-tab" data-surface="canvas" title="Solo pizarra">Pizarra</button>
             </div>
+
             <div id="pdfNavControls" class="pdf-nav-controls">
-              <button id="pdfPrevBtn" class="btn btn-sm btn-icon-compact" title="Página anterior" aria-label="Página anterior">‹</button>
+              <button id="pdfPrevBtn" class="btn btn-xs btn-subtle btn-icon-compact" title="Página anterior" aria-label="Página anterior">‹</button>
               <span class="pdf-page-indicator">
-                Pág. <input id="pdfPageInput" type="number" min="1" value="1" aria-label="Número de página" /> / <span id="pdfTotalPages">1</span>
+                <input id="pdfPageInput" type="number" min="1" value="1" aria-label="Número de página" />
+                <span class="page-slash">/</span>
+                <span id="pdfTotalPages">1</span>
               </span>
-              <button id="pdfNextBtn" class="btn btn-sm btn-icon-compact" title="Página siguiente" aria-label="Página siguiente">›</button>
-              <button id="clearPdfAnnBtn" class="btn btn-sm" title="Borrar anotaciones del profesor en esta página">Limpiar trazos</button>
+              <button id="pdfNextBtn" class="btn btn-xs btn-subtle btn-icon-compact" title="Página siguiente" aria-label="Página siguiente">›</button>
+              <button id="clearPdfAnnBtn" class="btn btn-xs btn-ghost" title="Limpiar marcas en esta página">Sin marcas</button>
             </div>
           </div>
 
           <div class="class-bar-right">
-            <span id="bufferBadge" class="buffer-badge" style="display:none;" title="Páginas preparadas con antelación">Buffer: +0</span>
+            <span id="bufferBadge" class="buffer-badge" style="display:none;" title="Páginas listas con antelación">+0 págs</span>
             <span id="classStatePill" class="class-state-pill" data-state="idle">PDF listo</span>
-            <button id="skipBeatBtn" class="btn btn-sm" style="display:none;" title="Pasar al siguiente bloque al instante [Tecla N]">Siguiente paso</button>
-            <button id="nextPageNowBtn" class="btn btn-sm" style="display:none;" title="Avanzar a la siguiente página [Shift+→]">Sig. pág</button>
-            <button id="verifyRecoverBtn" class="btn btn-sm" style="display:none;" title="Comprueba audio y cola; reanuda si algo se detuvo">Verificar</button>
-            <button id="classPauseResumeBtn" class="btn btn-sm btn-amber" style="display:none;">Pausar</button>
-            <button id="fsInterruptBtn" class="btn btn-sm btn-amber fs-only" title="Interrumpir al profesor para hacer una pregunta">Preguntar</button>
-            <button id="fsCaptionToggleBtn" class="btn btn-sm fs-only" title="Mostrar u ocultar subtítulos en pantalla completa">Subtítulos</button>
-            <button id="classroomFullscreenBtn" class="btn btn-sm btn-primary" title="Alternar pantalla completa [Tecla F]">Pantalla completa</button>
+            <button id="skipBeatBtn" class="btn btn-xs btn-subtle" style="display:none;" title="Siguiente paso [N]">Paso ›</button>
+            <button id="nextPageNowBtn" class="btn btn-xs btn-subtle" style="display:none;" title="Siguiente página [Shift+→]">Pág ››</button>
+            <button id="verifyRecoverBtn" class="btn btn-xs btn-ghost" style="display:none;" title="Verificar audio y reanudar si se detuvo">Verificar</button>
+            <button id="classPauseResumeBtn" class="btn btn-xs btn-amber" style="display:none;">Pausar</button>
+            <button id="fsInterruptBtn" class="btn btn-xs btn-amber fs-only" title="Interrumpir para preguntar">Preguntar</button>
+            <button id="fsCaptionToggleBtn" class="btn btn-xs btn-subtle fs-only" title="Mostrar u ocultar subtítulos">Subtítulos</button>
+            <button id="classroomFullscreenBtn" class="btn btn-xs btn-subtle" title="Pantalla completa [F]">Pantalla completa</button>
           </div>
         </div>
 
@@ -323,16 +280,16 @@
 
           <div id="mathStrip" class="math-strip">
             <span id="mathStripText"></span>
-            <button id="closeMathStrip" class="btn btn-sm btn-icon-compact" aria-label="Cerrar verificación">×</button>
+            <button id="closeMathStrip" class="btn btn-xs btn-ghost btn-icon-compact" aria-label="Cerrar verificación">×</button>
           </div>
 
-          <!-- Dual-Screen Classroom Stage (PDF Projector Left | Live Chalkboard Right) -->
+          <!-- Dual-Screen Classroom Stage -->
           <div id="dualStageContainer" class="dual-stage" data-layout="canvas">
             <section id="pdfPane" class="stage-pane pdf-pane" aria-label="Proyector PDF">
               <div id="pdfStageMount" class="pane-mount">
                 <div class="pane-placeholder">
                   <div class="pane-placeholder-icon" aria-hidden="true">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                       <polyline points="14 2 14 8 20 8"/>
                       <line x1="16" y1="13" x2="8" y2="13"/>
@@ -340,7 +297,7 @@
                     </svg>
                   </div>
                   <strong>Proyector de apuntes</strong>
-                  <p>Elige un documento a la izquierda y pulsa <em>Iniciar clase</em> para ver las diapositivas aquí.</p>
+                  <p>Elige un documento a la izquierda y pulsa <em>Empezar clase</em>.</p>
                 </div>
               </div>
             </section>
@@ -352,9 +309,9 @@
             <section id="boardPane" class="stage-pane board-pane" aria-label="Pizarra Viva del Profesor">
               <div id="boardStageMount" class="pane-mount">
                 <div class="empty-board" id="emptyBoard">
-                  <h2 id="welcomeTitle">Tu estudio está listo</h2>
+                  <h1 id="welcomeTitle">Tu aula interactiva está lista</h1>
                   <p id="welcomeDesc">
-                    Selecciona tus apuntes a la izquierda y pulsa <strong>Iniciar clase</strong>. Verás el PDF proyectado junto a esquemas y fórmulas paso a paso.
+                    Proyecta tus apuntes a la izquierda mientras el profesor explica y dibuja esquemas paso a paso a la derecha.
                   </p>
                   <div class="starter-chips" id="starterChips"></div>
                 </div>
@@ -370,65 +327,203 @@
             <span id="fsCaptionText" class="fs-caption-text">Aula en doble pantalla lista · Pulsa F para salir o escribe tu pregunta.</span>
           </div>
           <form id="fsQuickAskForm" class="fs-quick-ask">
-            <input id="fsQuickAskInput" type="text" placeholder="Pregunta o interrumpe al profesor..." autocomplete="off" />
-            <button type="submit" class="btn btn-sm btn-primary">Enviar</button>
+            <input id="fsQuickAskInput" type="text" placeholder="Pregunta al profesor..." autocomplete="off" />
+            <button type="submit" class="btn btn-xs btn-primary">Enviar</button>
           </form>
         </div>
 
-        <!-- Filmstrip Scene Switcher -->
-        <div id="sceneFilmstrip" class="scene-filmstrip">
-          <span class="filmstrip-empty">Las pizarras de la sesión aparecerán aquí para volver atrás cuando quieras.</span>
-        </div>
+        <!-- Auto-hiding Scene Filmstrip (invisible when empty!) -->
+        <div id="sceneFilmstrip" class="scene-filmstrip"></div>
       </main>
 
-      <!-- Right Rail: Calm Voice Console & Live Transcript -->
-      <section class="panel right-panel" aria-label="Voz y conversación">
-        <div class="voice-stage">
-          <div id="orbWrap" class="orb-wrap" data-state="idle">
-            <div id="orbRing" class="orb-ring"></div>
-            <button id="orbBtn" class="orb-core" title="Iniciar o finalizar la sesión de voz" aria-label="Iniciar o finalizar la sesión de voz">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                <line x1="12" x2="12" y1="19" y2="22"/>
+      <!-- Right Rail: Clean Claude/Perplexity-Style Voice & Conversation -->
+      <section class="panel right-panel" aria-label="Conversación y voz">
+        <!-- Slim Spacious Voice Header (Zero Overflow) -->
+        <div class="voice-bar">
+          <div class="voice-bar-top">
+            <div class="voice-bar-left">
+              <div id="orbWrap" class="orb-wrap" data-state="idle">
+                <div id="orbRing" class="orb-ring"></div>
+                <button id="orbBtn" class="orb-core" title="Activar o detener voz" aria-label="Activar o detener sesión de voz">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" x2="12" y1="19" y2="22"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="voice-meta">
+                <div id="voiceStateText" class="voice-state-text">Voz en espera</div>
+                <div class="voice-sub">Pulsa Esc para interrumpir</div>
+              </div>
+            </div>
+
+            <button id="audioMenuBtn" class="icon-btn icon-btn-sm" title="Opciones de audio (anti-eco, PTT, prueba de voz)" aria-label="Opciones de audio" aria-expanded="false">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="4" y1="21" x2="4" y2="14"/>
+                <line x1="4" y1="10" x2="4" y2="3"/>
+                <line x1="12" y1="21" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12" y2="3"/>
+                <line x1="20" y1="21" x2="20" y2="16"/>
+                <line x1="20" y1="12" x2="20" y2="3"/>
+                <line x1="1" y1="14" x2="7" y2="14"/>
+                <line x1="9" y1="8" x2="15" y2="8"/>
+                <line x1="17" y1="16" x2="23" y2="16"/>
               </svg>
             </button>
           </div>
-          <div id="voiceStateText" class="voice-state-text">Listo para empezar</div>
-          <div class="voice-hint">Habla cuando quieras o pulsa <kbd>Esc</kbd> para interrumpir</div>
 
-          <div class="voice-controls">
-            <button id="connectBtn" class="btn btn-primary">Iniciar voz</button>
-            <button id="muteBtn" class="btn" disabled>Silenciar</button>
-            <button id="echoBtn" class="btn btn-sm btn-emerald" title="Evita que el sonido de los altavoces interrumpa al profesor. Desactívalo solo con auriculares.">Anti-eco: ON</button>
-            <button id="interruptBtn" class="btn btn-sm btn-amber" disabled>Interrumpir (Esc)</button>
-            <button id="testAudioBtn" class="btn btn-sm" title="Comprueba que escuchas la voz del profesor">Probar voz</button>
-            <button id="pttBtn" class="btn btn-sm" disabled>Espacio PTT (OFF)</button>
+          <div class="voice-bar-actions">
+            <button id="connectBtn" class="btn btn-xs btn-subtle" style="flex:1;">Activar voz</button>
+            <button id="muteBtn" class="btn btn-xs btn-subtle" disabled title="Silenciar micrófono">Silenciar</button>
           </div>
         </div>
 
-        <div class="transcript-head">
-          <span>Transcripción en vivo</span>
-          <button id="clearTranscriptBtn" class="btn btn-sm btn-ghost">Limpiar</button>
+        <!-- Collapsible Micro Audio Controls Tray (Clean on demand) -->
+        <div id="audioTray" class="audio-tray" hidden>
+          <button id="echoBtn" class="btn btn-xs btn-emerald" title="Evita que tus altavoces interrumpan al profesor">Anti-eco: ON</button>
+          <button id="interruptBtn" class="btn btn-xs btn-amber" disabled>Interrumpir (Esc)</button>
+          <button id="testAudioBtn" class="btn btn-xs btn-subtle" title="Comprueba la salida de audio">Probar voz</button>
+          <button id="pttBtn" class="btn btn-xs btn-subtle" disabled>Espacio PTT (OFF)</button>
         </div>
 
-        <div id="transcriptList" class="transcript-list"></div>
+        <div class="transcript-head">
+          <span>Conversación</span>
+          <button id="clearTranscriptBtn" class="btn btn-xs btn-ghost">Limpiar</button>
+        </div>
 
-        <form id="textForm" class="chat-input-bar">
-          <input id="textInput" type="text" placeholder="Haz una pregunta o pide un esquema..." autocomplete="off" />
-          <button id="sendTextBtn" type="submit" class="btn btn-primary btn-sm">Enviar</button>
+        <div id="transcriptList" class="transcript-list" data-empty="Escribe una duda o activa la voz para hablar con tu profesor en tiempo real."></div>
+
+        <!-- Unified Clean Composer -->
+        <form id="textForm" class="composer-wrap">
+          <div class="composer-box">
+            <input id="textInput" type="text" placeholder="Escribe una pregunta o pide un esquema..." autocomplete="off" />
+            <button id="sendTextBtn" type="submit" class="composer-send" aria-label="Enviar mensaje" title="Enviar">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
         </form>
       </section>
+    </div>
+  </div>
+
+  <!-- Unified Professor & AI Engine Settings Modal (Progressive Disclosure!) -->
+  <div id="settingsModal" class="modal-backdrop">
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+      <div class="modal-header">
+        <div>
+          <h2 id="settingsModalTitle">Ajustes del profesor</h2>
+          <p class="modal-subtitle">Configura el motor de IA, los modelos locales o en la nube y la voz.</p>
+        </div>
+        <button id="closeSettingsBtn" class="icon-btn" aria-label="Cerrar ajustes" title="Cerrar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="settings-section">
+        <div class="rail-label" style="margin-bottom:8px;">Motor de inteligencia artificial</div>
+        <div class="engine-grid" id="engineGrid">
+          <button type="button" class="mode-btn engine-card active" data-engine="local">
+            <span class="mode-title">Local gratis ($0)</span>
+            <small>Ollama en tu Mac · Privado y sin límites</small>
+          </button>
+          <button type="button" class="mode-btn engine-card" data-engine="gemini">
+            <span class="mode-title">Gemini Cloud</span>
+            <small>Gemini 3.8 Live &amp; Gemini 4 · API</small>
+          </button>
+        </div>
+      </div>
+
+      <!-- Local Ollama Controls -->
+      <div id="localEngineFields" class="settings-section">
+        <div class="settings-grid-2">
+          <div class="field">
+            <label for="localModelSelect">Modelo Ollama <span id="ollamaBadge" class="inline-status"></span></label>
+            <select id="localModelSelect"></select>
+          </div>
+          <div class="field">
+            <label for="localVoiceSelect">Voz neuronal <span id="voiceCapBadge" class="inline-status"></span></label>
+            <select id="localVoiceSelect"></select>
+          </div>
+        </div>
+        <div id="quickPullBar" class="quick-pull-bar"></div>
+        <div id="pullProgress" class="pull-progress" style="display:none;"></div>
+        <div class="field">
+          <label for="localSttSelect">Reconocimiento de voz (STT)</label>
+          <select id="localSttSelect">
+            <option value="browser" selected>Micrófono del navegador (Instantáneo)</option>
+            <option value="whisper">Whisper local sin conexión (Mantener Espacio)</option>
+          </select>
+        </div>
+        <label class="checkbox-field">
+          <input id="localThinkCheck" type="checkbox" />
+          <span>Activar razonamiento profundo (&lt;think&gt; · más lento en respuestas largas)</span>
+        </label>
+      </div>
+
+      <!-- Cloud Gemini Live Controls -->
+      <div id="geminiEngineFields" class="settings-section" style="display:none;">
+        <div class="settings-grid-2">
+          <div class="field">
+            <label for="modelSelect">Gemini Live (Voz en directo)</label>
+            <select id="modelSelect"></select>
+          </div>
+          <div class="field">
+            <label for="geminiClassModelSelect">Gemini Clase (PDF y Pizarra)</label>
+            <select id="geminiClassModelSelect"></select>
+          </div>
+        </div>
+        <div class="settings-grid-2">
+          <div class="field">
+            <label for="voiceSelect">Voz de Gemini</label>
+            <select id="voiceSelect"></select>
+          </div>
+          <div class="field" id="thinkingField" style="display:none;">
+            <label for="thinkingSelect">Profundidad de razonamiento</label>
+            <select id="thinkingSelect">
+              <option value="low">Ligero — Consulta rápida</option>
+              <option value="medium" selected>Medio — Resolución guiada</option>
+              <option value="high">Alto — Demostraciones complejas</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section settings-grid-2">
+        <div class="field" style="margin-bottom:0;">
+          <label for="langSelect">Idioma</label>
+          <select id="langSelect">
+            <option value="auto" selected>Automático (según apuntes)</option>
+            <option value="es">Español (Castellano)</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label for="topicInput">Enfoque de hoy (opcional)</label>
+          <input id="topicInput" type="text" placeholder="ej. tema 3, repaso examen..." />
+        </div>
+      </div>
+
+      <div class="modal-footer-split">
+        <button id="apiKeyBtn" type="button" class="btn btn-sm btn-subtle">Configurar clave Gemini API</button>
+        <button id="doneSettingsBtn" type="button" class="btn btn-sm btn-primary">Listo</button>
+      </div>
     </div>
   </div>
 
   <!-- API Key Modal -->
   <div id="apiKeyModal" class="modal-backdrop">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="apiKeyModalTitle">
-      <h3 id="apiKeyModalTitle">Configurar clave de Gemini API</h3>
+      <h2 id="apiKeyModalTitle">Clave de Gemini API</h2>
       <p>
         Se guarda localmente en <code>~/.config/speaking-professor/.env</code> (<code>chmod 600</code>) para funcionar desde cualquier carpeta.
-        Puedes crear una clave en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>.
+        Obtén una clave en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>.
       </p>
       <div class="field">
         <label for="apiKeyInput">GEMINI_API_KEY</label>
@@ -436,7 +531,7 @@
       </div>
       <div id="apiKeyStatus" class="modal-status"></div>
       <div class="modal-actions">
-        <button id="closeModalBtn" class="btn">Cancelar</button>
+        <button id="closeModalBtn" class="btn btn-subtle">Cancelar</button>
         <button id="saveApiKeyBtn" class="btn btn-primary">Guardar clave</button>
       </div>
     </div>
@@ -445,9 +540,9 @@
   <!-- Switch Folder Modal -->
   <div id="folderModal" class="modal-backdrop">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="folderModalTitle">
-      <h3 id="folderModalTitle">Cambiar carpeta de estudio</h3>
+      <h2 id="folderModalTitle">Cambiar carpeta de estudio</h2>
       <p>
-        Indica cualquier carpeta de tu Mac con PDFs, presentaciones, apuntes u hojas de cálculo.
+        Indica cualquier carpeta con PDFs, presentaciones, apuntes u hojas de cálculo.
         El profesor analizará el contenido y se adaptará al temario al instante.
       </p>
       <div class="field">
@@ -456,8 +551,8 @@
       </div>
       <div id="folderModalStatus" class="modal-status"></div>
       <div class="modal-actions">
-        <button id="closeFolderModalBtn" class="btn">Cancelar</button>
-        <button id="switchFolderBtn" class="btn btn-primary">Cambiar y adaptar</button>
+        <button id="closeFolderModalBtn" class="btn btn-subtle">Cancelar</button>
+        <button id="switchFolderBtn" class="btn btn-primary">Cambiar carpeta</button>
       </div>
     </div>
   </div>
