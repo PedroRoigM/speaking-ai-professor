@@ -16,7 +16,10 @@ const APP_DIR = path.resolve(__dirname, '..');
 
 const { verifyMathPython } = await import(path.join(APP_DIR, 'lib', 'mathVerifier.mjs'));
 const { getOllamaStatus, getOllamaRunningGpuInfo } = await import(path.join(APP_DIR, 'lib', 'localProfessor.mjs'));
-const { BLUEPRINT_TEMPLATES, buildParametricBlueprintSvg, renderMathExpressionHtml } = await import(
+const { isAllowedLocalHost, isAllowedLocalOrigin, resolveStaticPath } = await import(
+  path.join(APP_DIR, 'lib', 'httpSecurity.mjs')
+);
+const { BLUEPRINT_TEMPLATES, buildParametricBlueprintSvg, renderMathExpressionHtml, evalSafeExpr } = await import(
   path.join(APP_DIR, 'public', 'stageRenderer.js')
 );
 
@@ -34,8 +37,12 @@ const check = async (name, fn) => {
 console.log('\n🔎 Speaking AI Professor — Verificación completa del aula\n');
 
 await check('Sintaxis JS/MJS + Python', () => {
-  for (const rel of [
+  const modules = [
     'server.mjs',
+    'bin/professor.mjs',
+    'lib/httpSecurity.mjs',
+    'lib/folderPicker.mjs',
+    'lib/studyLibrary.mjs',
     'lib/classTimeline.mjs',
     'lib/pdfStage.mjs',
     'lib/mathVerifier.mjs',
@@ -43,11 +50,12 @@ await check('Sintaxis JS/MJS + Python', () => {
     'public/app.js',
     'public/stageRenderer.js',
     'public/blueprintTemplates.js',
-  ]) {
+  ];
+  for (const rel of modules) {
     execFileSync('node', ['--check', path.join(APP_DIR, rel)], { stdio: 'pipe' });
   }
   execFileSync('python3', ['-m', 'py_compile', path.join(APP_DIR, 'lib', 'voice_worker.py')], { stdio: 'pipe' });
-  return '9 módulos sin errores de sintaxis';
+  return `${modules.length + 1} módulos sin errores de sintaxis`;
 });
 
 await check('Ollama Local + Apple Silicon Metal GPU', async () => {
@@ -114,6 +122,46 @@ await check('Watchdog Anti-Bloqueo + Self-Heal de Cola (Simulación de bloqueo e
   assert.ok(events.some((e) => e.type === 'timeline_segment' && e.segment?.id === 'seg-p9'), 'Self-heal no destrabó Pág. 9');
   eng.stop();
   return 'recuperación automática de cola bloqueada verificada';
+});
+
+await check('Seguridad: Sandbox Python AST, CSRF/CSWSH, Path Traversal y Parser Sin eval', async () => {
+  // 1. Python sandbox must block introspection escapes, imports, file I/O & exponent DoS
+  for (const payload of [
+    '().__class__.__base__.__subclasses__()',
+    'import os; os.system("id")',
+    '__import__("os").popen("id").read()',
+    'open("/etc/passwd").read()',
+    '10 ** 1000000',
+  ]) {
+    const res = await verifyMathPython(payload);
+    assert.strictEqual(res.ok, false, `Sandbox Python NO bloqueó payload peligroso: ${payload}`);
+  }
+  // Safe multi-line math must still work accurately
+  const safeRes = await verifyMathPython('m = 1200\nax = 11.772\nh = 0.48\nL = 2.65\ndFz = m * ax * h / L');
+  assert.ok(safeRes.ok && String(safeRes.result).includes('2558'), `Fallo en cálculo legítimo: ${JSON.stringify(safeRes)}`);
+
+  // 2. Host & Origin validation (DNS rebinding + CSRF/CSWSH protection)
+  assert.strictEqual(isAllowedLocalHost('localhost:3456'), true);
+  assert.strictEqual(isAllowedLocalHost('127.0.0.1:3456'), true);
+  assert.strictEqual(isAllowedLocalHost('evil.com:3456'), false);
+  assert.strictEqual(isAllowedLocalOrigin('http://localhost:3456'), true);
+  assert.strictEqual(isAllowedLocalOrigin('https://evil.com'), false);
+  assert.strictEqual(isAllowedLocalOrigin('http://localhost.evil.com'), false);
+
+  // 3. Path traversal & sibling-prefix bypass rejection
+  const pubDir = path.join(APP_DIR, 'public');
+  assert.ok(resolveStaticPath(pubDir, '/index.html')?.endsWith(path.join('public', 'index.html')));
+  assert.strictEqual(resolveStaticPath(pubDir, '/../server.mjs'), null);
+  assert.strictEqual(resolveStaticPath(pubDir, '/%2e%2e/server.mjs'), null);
+  assert.strictEqual(resolveStaticPath(pubDir, '/../public_evil/secret.txt'), null);
+
+  // 4. Zero-eval math parser accuracy & injection immunity
+  const dragFn = evalSafeExpr('0.5 * 1.225 * 0.34 * 1.95 * V^2');
+  assert.ok(dragFn && Math.abs(dragFn(10) - 40.60875) < 1e-4, 'evalSafeExpr falló en fórmula física');
+  assert.strictEqual(evalSafeExpr('alert(1)'), null);
+  assert.strictEqual(evalSafeExpr('constructor.constructor("return 1")()'), null);
+
+  return '5 ataques bloqueados + parser matemático sin eval/Function verificado';
 });
 
 console.log(failed === 0 ? '\n🎉 TODAS LAS VERIFICACIONES PASARON AL 100%\n' : `\n⚠️ ${failed} comprobaciones fallaron\n`);

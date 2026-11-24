@@ -19,6 +19,16 @@ import { ClassDirector } from './lib/classDirector.mjs';
 import { LookaheadClassEngine } from './lib/classTimeline.mjs';
 import { verifyMathPython } from './lib/mathVerifier.mjs';
 import { LocalVoiceEngine, LOCAL_VOICES } from './lib/localVoice.mjs';
+import { pickNativeFolderDialog, listBrowseDirectory } from './lib/folderPicker.mjs';
+import {
+  SECURITY_HEADERS,
+  HttpError,
+  isAllowedLocalHost,
+  isAllowedLocalOrigin,
+  resolveStaticPath,
+  readJsonBody,
+  sendJson,
+} from './lib/httpSecurity.mjs';
 import {
   LocalProfessorSession,
   RECOMMENDED_LOCAL_MODELS,
@@ -135,166 +145,32 @@ async function saveApiKey(newKey) {
   }
 }
 
-function readRequestBody(req, maxBytes = 35 * 1024 * 1024) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    let total = 0;
-    req.on('data', (chunk) => {
-      total += chunk.length;
-      if (total > maxBytes) {
-        reject(new Error('Request body too large'));
-        req.destroy();
-        return;
-      }
-      chunks.push(chunk);
-    });
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
-  });
-}
-
-function execFilePromise(cmd, args, opts = {}) {
-  return new Promise((resolve, reject) => {
-    execFile(cmd, args, { maxBuffer: 4 * 1024 * 1024, ...opts }, (err, stdout, stderr) => {
-      if (err) {
-        err.stdout = stdout;
-        err.stderr = stderr;
-        reject(err);
-      } else {
-        resolve({ stdout, stderr });
-      }
-    });
-  });
-}
-
-async function pickNativeFolderDialog(initialDir) {
-  let startDir = initialDir || os.homedir();
-  try {
-    const st = await fs.stat(startDir);
-    if (!st.isDirectory()) startDir = path.dirname(startDir);
-  } catch {
-    startDir = os.homedir();
-  }
-
-  if (process.platform === 'darwin') {
-    const script = [
-      'on run argv',
-      '  set startPath to item 1 of argv',
-      '  set startDir to POSIX file startPath',
-      '  try',
-      '    activate',
-      '    return POSIX path of (choose folder with prompt "Selecciona tu carpeta de estudio" default location startDir)',
-      '  on error number -128',
-      '    return "__CANCELLED__"',
-      '  end try',
-      'end run',
-    ];
-    try {
-      const args = script.flatMap((line) => ['-e', line]);
-      args.push('--', startDir);
-      const { stdout } = await execFilePromise('/usr/bin/osascript', args, { timeout: 180000 });
-      const chosen = String(stdout || '').trim();
-      if (!chosen || chosen === '__CANCELLED__') return { ok: true, cancelled: true };
-      return { ok: true, cancelled: false, folderPath: chosen.replace(/\/+$/, '') || '/' };
-    } catch (err) {
-      return { ok: false, fallbackRequired: true, error: err.message };
-    }
-  }
-
-  if (process.platform === 'linux') {
-    const attempts = [
-      ['zenity', ['--file-selection', '--directory', '--title=Selecciona tu carpeta de estudio', `--filename=${startDir}/`]],
-      ['kdialog', ['--getexistingdirectory', startDir, 'Selecciona tu carpeta de estudio']],
-    ];
-    for (const [bin, args] of attempts) {
-      try {
-        const { stdout } = await execFilePromise(bin, args, { timeout: 180000 });
-        const chosen = String(stdout || '').trim();
-        if (!chosen) return { ok: true, cancelled: true };
-        return { ok: true, cancelled: false, folderPath: chosen };
-      } catch (err) {
-        if (err.code === 1) return { ok: true, cancelled: true };
-        // ENOENT -> try next binary
-      }
-    }
-    return { ok: false, fallbackRequired: true, error: 'No desktop folder picker (zenity/kdialog) available' };
-  }
-
-  if (process.platform === 'win32') {
-    const ps = [
-      'Add-Type -AssemblyName System.Windows.Forms',
-      '$d = New-Object System.Windows.Forms.FolderBrowserDialog',
-      '$d.Description = "Selecciona tu carpeta de estudio"',
-      '$d.SelectedPath = $env:PROF_START_DIR',
-      'if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $d.SelectedPath } else { Write-Output "__CANCELLED__" }',
-    ].join('; ');
-    try {
-      const { stdout } = await execFilePromise('powershell.exe', ['-NoProfile', '-STA', '-Command', ps], {
-        timeout: 180000,
-        env: { ...process.env, PROF_START_DIR: startDir },
-      });
-      const chosen = String(stdout || '').trim();
-      if (!chosen || chosen === '__CANCELLED__') return { ok: true, cancelled: true };
-      return { ok: true, cancelled: false, folderPath: chosen };
-    } catch (err) {
-      return { ok: false, fallbackRequired: true, error: err.message };
-    }
-  }
-
-  return { ok: false, fallbackRequired: true, error: 'Unsupported platform for native folder dialog' };
-}
-
-async function listBrowseDirectory(dirPath) {
-  const home = os.homedir();
-  let current = path.resolve(String(dirPath || '').trim().replace(/^~/, home) || library?.workspaceRoot || home);
-  try {
-    const st = await fs.stat(current);
-    if (!st.isDirectory()) current = path.dirname(current);
-  } catch {
-    current = home;
-  }
-
-  const entries = await fs.readdir(current, { withFileTypes: true }).catch(() => []);
-  const dirs = entries
-    .filter((e) => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules' && e.name !== '__pycache__')
-    .map((e) => ({ name: e.name, fullPath: path.join(current, e.name) }))
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-
-  const shortcuts = [];
-  for (const [label, target] of [
-    ['Escritorio', path.join(home, 'Desktop')],
-    ['Documentos', path.join(home, 'Documents')],
-    ['Descargas', path.join(home, 'Downloads')],
-    ['Inicio', home],
-  ]) {
-    try {
-      const st = await fs.stat(target);
-      if (st.isDirectory()) shortcuts.push({ label, fullPath: target });
-    } catch {}
-  }
-
-  const parent = path.dirname(current);
-  return {
-    ok: true,
-    current,
-    parent: parent !== current ? parent : null,
-    dirs,
-    shortcuts,
-  };
-}
-
-function sendJson(res, status, data) {
-  const payload = JSON.stringify(data);
-  res.writeHead(status, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Cache-Control': 'no-store',
-  });
-  res.end(payload);
-}
-
 function cacheDirFor(dirPath) {
   const hash = crypto.createHash('sha1').update(path.resolve(dirPath)).digest('hex').slice(0, 12);
   return path.join(CACHE_ROOT, hash);
+}
+
+async function switchWorkspaceFolder(folderPath) {
+  const resolved = path.resolve(String(folderPath || '').trim().replace(/^~/, os.homedir()));
+  let st;
+  try {
+    st = await fs.stat(resolved);
+  } catch {
+    throw new HttpError(400, `La carpeta no existe: ${resolved}`);
+  }
+  if (!st.isDirectory()) {
+    throw new HttpError(400, 'La ruta indicada no es una carpeta');
+  }
+  await initLibraryFor(resolved);
+  TARGET_DIR = library.workspaceRoot;
+  const pdfs = await pdfStage.listPdfs();
+  return {
+    ok: true,
+    workspaceRoot: library.workspaceRoot,
+    domainProfile: library.domainProfile,
+    files: library.listFiles(),
+    pdfs,
+  };
 }
 
 let library;
@@ -342,8 +218,20 @@ process.on('SIGTERM', () => {
 
 const server = http.createServer(async (req, res) => {
   try {
+    if (!isAllowedLocalHost(req.headers.host)) {
+      return sendJson(res, 403, { error: 'Forbidden host' });
+    }
+    if (!isAllowedLocalOrigin(req.headers.origin)) {
+      return sendJson(res, 403, { error: 'Forbidden cross-origin request' });
+    }
+
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
-    const pathname = decodeURIComponent(url.pathname);
+    let pathname;
+    try {
+      pathname = decodeURIComponent(url.pathname);
+    } catch {
+      return sendJson(res, 400, { error: 'Malformed URL encoding' });
+    }
 
     if (req.method === 'GET' && pathname === '/api/health') {
       const [ollama, gpuPs, pdfs] = await Promise.all([
@@ -393,6 +281,7 @@ const server = http.createServer(async (req, res) => {
       const pngPath = await pdfStage.renderDisplayPng(doc, page);
       const data = await fs.readFile(pngPath);
       res.writeHead(200, {
+        ...SECURITY_HEADERS,
         'Content-Type': 'image/png',
         'Cache-Control': 'public, max-age=3600',
       });
@@ -423,7 +312,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && pathname === '/api/voice/test') {
-      const body = JSON.parse((await readRequestBody(req, 1024 * 16)).toString('utf8') || '{}');
+      const body = await readJsonBody(req, 1024 * 16);
       const voiceId = String(body.voiceId || 'kokoro:em_alex');
       const language = String(body.language || 'es');
       const sampleText =
@@ -440,10 +329,11 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && pathname === '/api/ollama/pull') {
-      const body = JSON.parse((await readRequestBody(req, 1024 * 16)).toString('utf8') || '{}');
+      const body = await readJsonBody(req, 1024 * 16);
       const modelName = String(body.model || '').trim();
       if (!modelName) return sendJson(res, 400, { error: 'Missing model name' });
       res.writeHead(200, {
+        ...SECURITY_HEADERS,
         'Content-Type': 'application/x-ndjson; charset=utf-8',
         'Cache-Control': 'no-store',
       });
@@ -459,7 +349,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && pathname === '/api/apikey') {
-      const body = JSON.parse((await readRequestBody(req, 1024 * 16)).toString('utf8') || '{}');
+      const body = await readJsonBody(req, 1024 * 16);
       await saveApiKey(body.apiKey);
       return sendJson(res, 200, { ok: true, hasApiKey: true });
     }
@@ -476,39 +366,22 @@ const server = http.createServer(async (req, res) => {
       if (picked.cancelled) {
         return sendJson(res, 200, { ok: true, cancelled: true });
       }
-      await initLibraryFor(picked.folderPath);
-      TARGET_DIR = library.workspaceRoot;
-      const pdfs = await pdfStage.listPdfs();
-      return sendJson(res, 200, {
-        ok: true,
-        cancelled: false,
-        workspaceRoot: library.workspaceRoot,
-        domainProfile: library.domainProfile,
-        files: library.listFiles(),
-        pdfs,
-      });
+      const switched = await switchWorkspaceFolder(picked.folderPath);
+      return sendJson(res, 200, { ...switched, cancelled: false });
     }
 
     if (req.method === 'GET' && pathname === '/api/folder/browse') {
       const reqDir = url.searchParams.get('dir') || library.workspaceRoot || os.homedir();
-      const listing = await listBrowseDirectory(reqDir);
+      const listing = await listBrowseDirectory(reqDir, library.workspaceRoot);
       return sendJson(res, 200, listing);
     }
 
     if (req.method === 'POST' && pathname === '/api/folder') {
-      const body = JSON.parse((await readRequestBody(req, 1024 * 16)).toString('utf8') || '{}');
-      const requested = String(body.folderPath || '').trim().replace(/^~/, os.homedir());
+      const body = await readJsonBody(req, 1024 * 16);
+      const requested = String(body.folderPath || '').trim();
       if (!requested) return sendJson(res, 400, { error: 'Folder path is required' });
-      await initLibraryFor(requested);
-      TARGET_DIR = library.workspaceRoot;
-      const pdfs = await pdfStage.listPdfs();
-      return sendJson(res, 200, {
-        ok: true,
-        workspaceRoot: library.workspaceRoot,
-        domainProfile: library.domainProfile,
-        files: library.listFiles(),
-        pdfs,
-      });
+      const switched = await switchWorkspaceFolder(requested);
+      return sendJson(res, 200, switched);
     }
 
     if (req.method === 'GET' && pathname === '/api/materials') {
@@ -523,19 +396,19 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && pathname === '/api/materials/toggle') {
-      const body = JSON.parse((await readRequestBody(req, 1024 * 16)).toString('utf8') || '{}');
+      const body = await readJsonBody(req, 1024 * 16);
       const updated = library.toggleFile(body.id, body.active);
       if (!updated) return sendJson(res, 404, { error: 'File not found' });
       return sendJson(res, 200, { ok: true, id: updated.id, active: updated.active });
     }
 
     if (req.method === 'POST' && pathname === '/api/upload') {
-      const body = JSON.parse((await readRequestBody(req, 40 * 1024 * 1024)).toString('utf8') || '{}');
+      const body = await readJsonBody(req, 40 * 1024 * 1024);
       if (!body.filename || !body.base64) {
         return sendJson(res, 400, { error: 'Missing filename or base64 data' });
       }
-      const buffer = Buffer.from(body.base64, 'base64');
-      const added = await library.addUploadedFile({ filename: body.filename, buffer });
+      const buffer = Buffer.from(String(body.base64), 'base64');
+      const added = await library.addUploadedFile({ filename: String(body.filename), buffer });
       const pdfs = await pdfStage.listPdfs();
       return sendJson(res, 200, {
         ok: true,
@@ -546,10 +419,9 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    const relFile = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
-    const safePath = path.resolve(PUBLIC_DIR, relFile);
-    if (!safePath.startsWith(PUBLIC_DIR)) {
-      res.writeHead(403);
+    const safePath = resolveStaticPath(PUBLIC_DIR, pathname);
+    if (!safePath) {
+      res.writeHead(403, SECURITY_HEADERS);
       return res.end('Forbidden');
     }
 
@@ -557,22 +429,31 @@ const server = http.createServer(async (req, res) => {
       const data = await fs.readFile(safePath);
       const ext = path.extname(safePath).toLowerCase();
       res.writeHead(200, {
+        ...SECURITY_HEADERS,
         'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
-        'Cache-Control': 'no-store',
+        'Cache-Control': ext === '.woff2' || ext === '.woff' ? 'public, max-age=86400' : 'no-store',
       });
       res.end(data);
     } catch {
-      res.writeHead(404);
+      res.writeHead(404, SECURITY_HEADERS);
       res.end('Not found');
     }
   } catch (err) {
-    console.error('[HTTP error]', err);
-    sendJson(res, 500, { error: err.message || 'Internal server error' });
+    const status = err instanceof HttpError ? err.status : 500;
+    if (status >= 500) console.error('[HTTP error]', err);
+    sendJson(res, status, { error: err.message || 'Internal server error' });
   }
 });
 
 // WebSocket Bridge: Browser <-> Node <-> Local Ollama / Gemini Live API
-const wss = new WebSocketServer({ server, path: '/ws' });
+// Protected against Cross-Site WebSocket Hijacking (CSWSH) & DNS rebinding.
+const wss = new WebSocketServer({
+  server,
+  path: '/ws',
+  maxPayload: 25 * 1024 * 1024,
+  verifyClient: ({ origin, req }) =>
+    isAllowedLocalHost(req.headers.host) && isAllowedLocalOrigin(origin || req.headers.origin),
+});
 
 wss.on('connection', (clientWs) => {
   let liveSession = null;
@@ -799,56 +680,34 @@ wss.on('connection', (clientWs) => {
         return res;
       }
 
+      const withStageSink = async (fn) => {
+        if (!stageSink) return fn();
+        const origSend = classDirector.sendClient;
+        classDirector.sendClient = (p) => (p.type?.startsWith('stage_') ? emitStage(p) : sendClient(p));
+        try {
+          return await fn();
+        } finally {
+          classDirector.sendClient = origSend;
+        }
+      };
+
       if (name === 'annotate_pdf_page') {
-        // Sync classDirector activeBundle if lookaheadClass owns the open page
         if (!classDirector.activeBundle && lookaheadClass.pdfDoc) {
           await classDirector.openPage({ docId: lookaheadClass.pdfId, page: lookaheadClass.playedPage, emit: false, includeVision: false });
         }
-        const origSend = classDirector.sendClient;
-        if (stageSink) {
-          classDirector.sendClient = (p) => (p.type?.startsWith('stage_') ? emitStage(p) : sendClient(p));
-        }
-        try {
-          return classDirector.annotateCurrentPage(args);
-        } finally {
-          classDirector.sendClient = origSend;
-        }
+        return await withStageSink(() => classDirector.annotateCurrentPage(args));
       }
 
       if (name === 'start_blank_canvas_problem') {
-        const origSend = classDirector.sendClient;
-        if (stageSink) {
-          classDirector.sendClient = (p) => (p.type?.startsWith('stage_') ? emitStage(p) : sendClient(p));
-        }
-        try {
-          return classDirector.startProblemCanvas(args);
-        } finally {
-          classDirector.sendClient = origSend;
-        }
+        return await withStageSink(() => classDirector.startProblemCanvas(args));
       }
 
       if (name === 'append_problem_step') {
-        const origSend = classDirector.sendClient;
-        if (stageSink) {
-          classDirector.sendClient = (p) => (p.type?.startsWith('stage_') ? emitStage(p) : sendClient(p));
-        }
-        try {
-          return classDirector.appendProblemStep(args);
-        } finally {
-          classDirector.sendClient = origSend;
-        }
+        return await withStageSink(() => classDirector.appendProblemStep(args));
       }
 
       if (name === 'return_to_pdf') {
-        const origSend = classDirector.sendClient;
-        if (stageSink) {
-          classDirector.sendClient = (p) => (p.type?.startsWith('stage_') ? emitStage(p) : sendClient(p));
-        }
-        try {
-          return await classDirector.returnToPdf(args);
-        } finally {
-          classDirector.sendClient = origSend;
-        }
+        return await withStageSink(() => classDirector.returnToPdf(args));
       }
 
       if (name === 'class_progress') {
@@ -1346,22 +1205,23 @@ wss.on('connection', (clientWs) => {
 
     // ---------- Local Ollama Engine Routing ----------
     if (activeEngine === 'local' && localSession) {
+      const buildLocalQuestionPrompt = async (userText) => {
+        if (!lookaheadClass.active) return userText;
+        lookaheadClass.pauseForQuestion();
+        const bundle = await pdfStage.getPageBundle(lookaheadClass.pdfDoc, lookaheadClass.playedPage, {
+          includeVision: localSession.modelSupportsVision,
+        });
+        if (bundle.visionBase64 && localSession.modelSupportsVision) {
+          localSession.addPendingImage(bundle.visionBase64);
+        }
+        await classDirector.openPage({ docId: lookaheadClass.pdfId, page: lookaheadClass.playedPage, emit: false, includeVision: false });
+        return `[CONTEXTO ACTUAL DE CLASE — ${lookaheadClass.getPlayedContextSummary()}]\nTexto de la Página ${bundle.page}:\n${bundle.text.slice(0, 1400)}\n\nPREGUNTA DEL ALUMNO: ${userText}`;
+      };
+
       if (msg.type === 'text' && msg.text) {
         const cmdRes = await handleClassVoiceCommand(msg.text);
         if (cmdRes.handled) return;
-        let promptForModel = msg.text;
-        if (lookaheadClass.active) {
-          lookaheadClass.pauseForQuestion();
-          // Give Q&A model exact context of ONLY what the student has already heard up to this second!
-          const bundle = await pdfStage.getPageBundle(lookaheadClass.pdfDoc, lookaheadClass.playedPage, {
-            includeVision: localSession.modelSupportsVision,
-          });
-          if (bundle.visionBase64 && localSession.modelSupportsVision) {
-            localSession.addPendingImage(bundle.visionBase64);
-          }
-          await classDirector.openPage({ docId: lookaheadClass.pdfId, page: lookaheadClass.playedPage, emit: false, includeVision: false });
-          promptForModel = `[CONTEXTO ACTUAL DE CLASE — ${lookaheadClass.getPlayedContextSummary()}]\nTexto de la Página ${bundle.page}:\n${bundle.text.slice(0, 1400)}\n\nPREGUNTA DEL ALUMNO: ${msg.text}`;
-        }
+        const promptForModel = await buildLocalQuestionPrompt(msg.text);
         localSession.handleUserMessage(promptForModel, { alreadyLogged: Boolean(msg.alreadyLogged) });
       } else if (msg.type === 'local_audio_turn' && msg.data) {
         sendClient({ type: 'tool_status', label: 'Transcribiendo voz en local (mlx-whisper)...' });
@@ -1370,18 +1230,7 @@ wss.on('connection', (clientWs) => {
           sendClient({ type: 'input_transcript', text: stt.text });
           const cmdRes = await handleClassVoiceCommand(stt.text);
           if (cmdRes.handled) return;
-          let promptForModel = stt.text;
-          if (lookaheadClass.active) {
-            lookaheadClass.pauseForQuestion();
-            const bundle = await pdfStage.getPageBundle(lookaheadClass.pdfDoc, lookaheadClass.playedPage, {
-              includeVision: localSession.modelSupportsVision,
-            });
-            if (bundle.visionBase64 && localSession.modelSupportsVision) {
-              localSession.addPendingImage(bundle.visionBase64);
-            }
-            await classDirector.openPage({ docId: lookaheadClass.pdfId, page: lookaheadClass.playedPage, emit: false, includeVision: false });
-            promptForModel = `[CONTEXTO ACTUAL DE CLASE — ${lookaheadClass.getPlayedContextSummary()}]\nTexto de la Página ${bundle.page}:\n${bundle.text.slice(0, 1400)}\n\nPREGUNTA DEL ALUMNO: ${stt.text}`;
-          }
+          const promptForModel = await buildLocalQuestionPrompt(stt.text);
           localSession.handleUserMessage(promptForModel, { alreadyLogged: true });
         } else {
           sendClient({ type: 'tool_status', label: stt.error || 'No se detectó voz clara.' });

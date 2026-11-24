@@ -321,8 +321,12 @@ export function evalSafeExpr(rawExpr) {
     .replace(/\bln\(/gi, 'log(')
     .replace(/\^/g, '**');
 
-  // Auto-detect a single non-reserved independent variable (e.g. V, v, t, alpha, w, u, n) and map to `x`
+  // Auto-detect a single non-reserved independent variable (e.g. V, v, t, alpha, w, u, n) and map to `x`.
+  // Reject unknown function calls like alert(1) immediately instead of mistaking them for variable multiplication.
   const reserved = new Set(['sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'exp', 'log', 'log10', 'sqrt', 'abs', 'pow', 'min', 'max', 'PI', 'E', 'x']);
+  for (const m of expr.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g)) {
+    if (!reserved.has(m[1])) return null;
+  }
   const idents = [...new Set((expr.match(/\b[A-Za-z_][A-Za-z0-9_]*\b/g) || []).filter((id) => !reserved.has(id)))];
   if (idents.length === 1) {
     const varRe = new RegExp(`\\b${idents[0]}\\b`, 'g');
@@ -337,16 +341,146 @@ export function evalSafeExpr(rawExpr) {
     .replace(/\)(x\b|\d|\()/g, ')*$1')
     .replace(/\bx\(/g, 'x*(');
 
-  const stripped = expr
-    .replace(/\b(sin|cos|tan|asin|acos|atan|sinh|cosh|tanh|exp|log|log10|sqrt|abs|pow|min|max|PI|E|x)\b/g, '')
-    .replace(/[0-9.+\-*/(),\s]/g, '');
-  if (stripped.length > 0) return null;
+  // Zero-eval recursive-descent math parser (no `eval`, no `new Function`, 100% CSP-safe)
+  const MATH_FUNCS = {
+    sin: Math.sin, cos: Math.cos, tan: Math.tan,
+    asin: Math.asin, acos: Math.acos, atan: Math.atan,
+    sinh: Math.sinh, cosh: Math.cosh, tanh: Math.tanh,
+    exp: Math.exp, log: Math.log, log10: Math.log10,
+    sqrt: Math.sqrt, abs: Math.abs, pow: Math.pow,
+    min: Math.min, max: Math.max,
+  };
+  const MATH_CONSTS = { PI: Math.PI, E: Math.E };
+
+  // Tokenize strictly into numbers, identifiers, and operators
+  const tokens = [];
+  let i = 0;
+  while (i < expr.length) {
+    const ch = expr[i];
+    if (/\s/.test(ch)) { i++; continue; }
+    if (expr.slice(i, i + 2) === '**') { tokens.push({ t: 'op', v: '**' }); i += 2; continue; }
+    if ('+-*/(),'.includes(ch)) { tokens.push({ t: 'op', v: ch }); i++; continue; }
+    if (/[0-9.]/.test(ch)) {
+      const m = expr.slice(i).match(/^(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/);
+      if (!m) return null;
+      tokens.push({ t: 'num', v: Number(m[0]) });
+      i += m[0].length;
+      continue;
+    }
+    if (/[A-Za-z]/.test(ch)) {
+      const m = expr.slice(i).match(/^[A-Za-z][A-Za-z0-9]*/);
+      if (!m) return null;
+      const id = m[0];
+      if (id !== 'x' && !(id in MATH_FUNCS) && !(id in MATH_CONSTS)) return null;
+      tokens.push({ t: 'id', v: id });
+      i += id.length;
+      continue;
+    }
+    return null;
+  }
+  if (!tokens.length) return null;
+
+  // Compile tokens into an AST tree once (fast evaluation per plotted point!)
+  let pos = 0;
+  const peek = () => tokens[pos] || null;
+  const eat = (v) => {
+    const tok = peek();
+    if (!tok || (v !== undefined && tok.v !== v)) return null;
+    pos++;
+    return tok;
+  };
+
+  function parseAddSub() {
+    let left = parseMulDiv();
+    while (peek()?.t === 'op' && (peek().v === '+' || peek().v === '-')) {
+      const op = eat().v;
+      const right = parseMulDiv();
+      left = { kind: 'bin', op, left, right };
+    }
+    return left;
+  }
+
+  function parseMulDiv() {
+    let left = parsePower();
+    while (peek()?.t === 'op' && (peek().v === '*' || peek().v === '/')) {
+      const op = eat().v;
+      const right = parsePower();
+      left = { kind: 'bin', op, left, right };
+    }
+    return left;
+  }
+
+  function parsePower() {
+    let base = parseUnary();
+    if (peek()?.t === 'op' && peek().v === '**') {
+      eat('**');
+      const exp = parsePower(); // right-associative
+      return { kind: 'bin', op: '**', left: base, right: exp };
+    }
+    return base;
+  }
+
+  function parseUnary() {
+    if (peek()?.t === 'op' && (peek().v === '+' || peek().v === '-')) {
+      const op = eat().v;
+      return { kind: 'unary', op, arg: parseUnary() };
+    }
+    return parsePrimary();
+  }
+
+  function parsePrimary() {
+    const tok = peek();
+    if (!tok) throw new Error('Unexpected end');
+    if (tok.t === 'num') { eat(); return { kind: 'num', v: tok.v }; }
+    if (tok.t === 'id') {
+      eat();
+      if (tok.v === 'x') return { kind: 'var' };
+      if (tok.v in MATH_CONSTS) return { kind: 'num', v: MATH_CONSTS[tok.v] };
+      if (tok.v in MATH_FUNCS) {
+        if (!eat('(')) throw new Error('Expected (');
+        const args = [];
+        if (peek()?.v !== ')') {
+          args.push(parseAddSub());
+          while (peek()?.v === ',') { eat(','); args.push(parseAddSub()); }
+        }
+        if (!eat(')')) throw new Error('Expected )');
+        return { kind: 'call', fn: MATH_FUNCS[tok.v], args };
+      }
+      throw new Error('Unknown id');
+    }
+    if (tok.t === 'op' && tok.v === '(') {
+      eat('(');
+      const inner = parseAddSub();
+      if (!eat(')')) throw new Error('Expected )');
+      return inner;
+    }
+    throw new Error('Unexpected token');
+  }
+
+  function evalAst(node, x) {
+    switch (node.kind) {
+      case 'num': return node.v;
+      case 'var': return x;
+      case 'unary': return node.op === '-' ? -evalAst(node.arg, x) : evalAst(node.arg, x);
+      case 'call': return node.fn(...node.args.map((a) => evalAst(a, x)));
+      case 'bin': {
+        const l = evalAst(node.left, x);
+        const r = evalAst(node.right, x);
+        if (node.op === '+') return l + r;
+        if (node.op === '-') return l - r;
+        if (node.op === '*') return l * r;
+        if (node.op === '/') return l / r;
+        if (node.op === '**') return l ** r;
+        return NaN;
+      }
+      default: return NaN;
+    }
+  }
 
   try {
-    const fn = new Function(
-      'x',
-      `const {sin,cos,tan,asin,acos,atan,sinh,cosh,tanh,exp,log,log10,sqrt,abs,pow,min,max,PI,E}=Math; return (${expr});`,
-    );
+    const ast = parseAddSub();
+    if (pos !== tokens.length) return null;
+    const fn = (x) => evalAst(ast, x);
     const probe = fn(1);
     if (typeof probe !== 'number') return null;
     return fn;
