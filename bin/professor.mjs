@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 /**
  * Global CLI launcher for Speaking AI Professor.
- * Install globally via `npm link` from the repository root, then run:
- *   cd /path/to/any/study-folder
+ * Works from ANY folder depth on macOS, Windows, and Linux once linked (`npm run setup` or `npm link`):
+ *   cd /any/folder/at/any/depth
  *   professor
  * Or pass a folder directly:
  *   professor ~/Desktop/Physics_Notes --port 3456
  */
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const serverEntry = path.resolve(__dirname, '..', 'server.mjs');
+const scriptPath = fs.realpathSync(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(path.dirname(scriptPath), '..');
+const serverEntry = path.join(repoRoot, 'server.mjs');
+const callerCwd = process.cwd();
 
 const userArgs = process.argv.slice(2);
 const hasDirFlag = userArgs.some((a) => a === '--dir' || a === '-d' || !a.startsWith('-'));
@@ -21,13 +23,14 @@ const hasOpenFlag = userArgs.includes('--open') || userArgs.includes('--no-open'
 
 const forwardArgs = [serverEntry, ...userArgs.filter((a) => a !== '--no-open')];
 if (!hasDirFlag) {
-  forwardArgs.push('--dir', process.cwd());
+  forwardArgs.push('--dir', callerCwd);
 }
 if (!hasOpenFlag) {
   forwardArgs.push('--open');
 }
 
 const child = spawn(process.execPath, forwardArgs, {
+  cwd: repoRoot,
   stdio: 'inherit',
   env: process.env,
 });

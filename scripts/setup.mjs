@@ -29,13 +29,13 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 
 const args = new Set(process.argv.slice(2).map((a) => a.toLowerCase()));
 if (args.has('-h') || args.has('--help')) {
-  console.log('\nUsage: npm run setup -- [--with-voice] [--link-cli] [--tune-gpu] [--all]\n');
+  console.log('\nUsage: npm run setup -- [--with-voice] [--no-link] [--tune-gpu] [--all]\n');
   process.exit(0);
 }
 
 const all = args.has('--all') || args.has('-all');
 const withVoice = all || args.has('--with-voice') || args.has('-withvoice');
-const linkCli = all || args.has('--link-cli') || args.has('-linkcli');
+const linkCli = !args.has('--no-link');
 const tuneGpu = all || args.has('--tune-gpu');
 
 const plat = getPlatformSummary();
@@ -158,11 +158,46 @@ if (tuneGpu && plat.isAppleSilicon) {
   runStep('bash', [path.join(ROOT_DIR, 'scripts', 'optimize_mac_gpu.sh')]);
 }
 
-// 6. Optional global `professor` CLI
+// 6. Global `professor` CLI (works from ANY folder at ANY depth!)
 if (linkCli) {
   console.log("🔗 Linking global 'professor' CLI (npm link)...");
   if (runStep(npmBin, ['link'])) {
-    console.log("✅ Global 'professor' CLI registered! (Open a new terminal if not recognized immediately.)");
+    const prefixRes = spawnSync(npmBin, ['prefix', '-g'], {
+      cwd: ROOT_DIR,
+      encoding: 'utf8',
+      shell: isWindows(),
+      windowsHide: true,
+    });
+    const npmPrefix = String(prefixRes.stdout || '').trim();
+    const globalBinDir = npmPrefix ? (isWindows() ? npmPrefix : path.join(npmPrefix, 'bin')) : '';
+    const currentPath = String(process.env.PATH || '');
+    const inPath =
+      globalBinDir &&
+      currentPath
+        .split(path.delimiter)
+        .some((p) => p.replace(/[\\/]+$/, '').toLowerCase() === globalBinDir.replace(/[\\/]+$/, '').toLowerCase());
+
+    if (globalBinDir && !inPath) {
+      if (isWindows()) {
+        // Persist global npm bin dir into Windows User PATH (no admin required) so `professor` works everywhere
+        const psAddPath =
+          '$d = $env:PROF_NPM_BIN; $cur = [Environment]::GetEnvironmentVariable("Path", "User"); ' +
+          'if (-not $cur) { $cur = "" }; ' +
+          '$parts = $cur -split ";" | Where-Object { $_ -ne "" }; ' +
+          'if ($parts -notcontains $d) { [Environment]::SetEnvironmentVariable("Path", (($parts + $d) -join ";"), "User") }';
+        spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psAddPath], {
+          windowsHide: true,
+          env: { ...process.env, PROF_NPM_BIN: globalBinDir },
+        });
+        console.log(`✅ Global 'professor' CLI registered and added to your User PATH (${globalBinDir}).`);
+        console.log("   Open a new terminal window and run 'professor' inside ANY folder!");
+      } else {
+        console.log(`✅ Global 'professor' CLI linked in ${globalBinDir}`);
+        console.log(`   Add it to your shell PATH if needed: export PATH="${globalBinDir}:$PATH"`);
+      }
+    } else {
+      console.log("✅ Global 'professor' CLI ready! You can now run 'professor' inside ANY folder at any depth.");
+    }
   } else {
     console.log("⚠️  npm link did not complete. You can always run 'npm start' or 'node server.mjs --open'.");
   }
