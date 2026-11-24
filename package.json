@@ -32,6 +32,8 @@
     "professor": "./bin/professor.mjs"
   },
   "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "setup:all": "node scripts/setup.mjs --all",
     "start": "node server.mjs --open",
     "dev": "node --watch server.mjs",
     "verify": "node scripts/verify_classroom.mjs",

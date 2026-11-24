@@ -100,57 +100,33 @@ flowchart LR
 - **Poppler** (for rendering PDF slides):
   - macOS: `brew install poppler`
   - Ubuntu / Debian: `sudo apt install poppler-utils`
-  - Windows: `winget install oschwartz10612.Poppler` *(auto-installed by `.\install.ps1` and auto-detected even before PATH refresh)*
+  - Windows: `winget install oschwartz10612.Poppler` *(auto-installed by `npm run setup` and auto-detected even before PATH refresh)*
 - **Python 3.10+** (for math verification & Office document extraction)
 - **At least one AI backend**:
   - **Local Free ($0)**: [Ollama](https://ollama.com/) + `ollama pull gemma4:12b` *(or `qwen3.5:9b`)*
   - **Or Cloud**: a free/paid `GEMINI_API_KEY` from [Google AI Studio](https://aistudio.google.com/apikey)
 
-### Option A — Automated Installer (macOS / Linux)
+### Option A — Universal 1-Command Setup (Windows · macOS · Linux)
+
+Works identically in **Windows CMD / PowerShell**, **macOS Terminal**, and **Linux** (pure Node.js — zero `.ps1`/`.bat` ExecutionPolicy or antivirus issues):
 
 ```bash
 git clone https://github.com/PedroRoigM/speaking-ai-professor.git
 cd speaking-ai-professor
 
-# Standard setup (Node deps + Poppler check + diagnostics):
-chmod +x install.sh
-./install.sh
+# Standard setup (Node deps + Poppler check + native OS voice + diagnostics):
+npm run setup
+
+# Or Full Studio setup (+ local Kokoro neural voice + global `professor` CLI):
+npm run setup:all
 
 # Launch with built-in sample notes:
 npm start
 ```
 
-> **Apple Silicon Mac (M1 / M2 / M3 / M4) Full $0 Studio**:
-> ```bash
-> ./install.sh --all
-> ollama pull gemma4:12b
-> ```
-> Installs Node dependencies, Poppler, `espeak-ng`, Python `.venv` with **Kokoro-82M MLX** & **mlx-whisper**, applies Metal GPU tuning, and links the global `professor` CLI!
->
-> **Linux (`--with-voice`)**: automatically installs cross-platform **Kokoro ONNX + faster-whisper** (`requirements-voice-crossplatform.txt`), with `espeak-ng` as 0 MB native fallback.
+> **macOS / Linux Shell Alternative**: `./install.sh` (or `./install.sh --all` on Apple Silicon M1–M4) is also available.
 
-### Option B — Automated Installer (Windows 10 / 11)
-
-Double-click **`install.bat`** in File Explorer, or run from **CMD / PowerShell**:
-
-```powershell
-git clone https://github.com/PedroRoigM/speaking-ai-professor.git
-cd speaking-ai-professor
-
-# Standard setup (Node deps + winget Poppler + native Windows SAPI voice — 0 MB extra):
-.\install.bat
-
-# Optional: add Kokoro ONNX neural voice + faster-whisper + global `professor` command:
-.\install.bat -All
-
-# (Or directly via PowerShell):
-powershell -ExecutionPolicy Bypass -File .\install.ps1
-
-# Launch with built-in sample notes:
-npm start
-```
-
-### Option C — Manual Install (macOS / Linux / Windows)
+### Option B — Manual Install (macOS / Linux / Windows)
 
 ```bash
 git clone https://github.com/PedroRoigM/speaking-ai-professor.git

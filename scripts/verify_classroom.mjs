@@ -53,6 +53,7 @@ await check('Sintaxis JS/MJS + Python', async () => {
   const modules = [
     'server.mjs',
     'bin/professor.mjs',
+    'scripts/setup.mjs',
     'lib/platformTools.mjs',
     'lib/httpSecurity.mjs',
     'lib/folderPicker.mjs',
