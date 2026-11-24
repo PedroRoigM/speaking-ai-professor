@@ -129,17 +129,22 @@ npm start
 >
 > **Linux (`--with-voice`)**: automatically installs cross-platform **Kokoro ONNX + faster-whisper** (`requirements-voice-crossplatform.txt`), with `espeak-ng` as 0 MB native fallback.
 
-### Option B — Automated Installer (Windows 10 / 11 PowerShell)
+### Option B — Automated Installer (Windows 10 / 11)
+
+Double-click **`install.bat`** in File Explorer, or run from **CMD / PowerShell**:
 
 ```powershell
 git clone https://github.com/PedroRoigM/speaking-ai-professor.git
 cd speaking-ai-professor
 
 # Standard setup (Node deps + winget Poppler + native Windows SAPI voice — 0 MB extra):
-.\install.ps1
+.\install.bat
 
 # Optional: add Kokoro ONNX neural voice + faster-whisper + global `professor` command:
-.\install.ps1 -All
+.\install.bat -All
+
+# (Or directly via PowerShell):
+powershell -ExecutionPolicy Bypass -File .\install.ps1
 
 # Launch with built-in sample notes:
 npm start
