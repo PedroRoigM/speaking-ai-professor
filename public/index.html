@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profesor IA — Estudio y Pizarra en Vivo</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell" id="appShell">
+    <!-- Top Header -->
+    <header class="topbar">
+      <div class="brand">
+        <button id="toggleLeftRailBtn" class="icon-btn active" title="Mostrar u ocultar panel de estudio" aria-label="Mostrar u ocultar panel de estudio" aria-pressed="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2.5"/>
+            <line x1="9" y1="4" x2="9" y2="20"/>
+          </svg>
+        </button>
+
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 7.5 12 3l10 4.5-10 4.5L2 7.5Z"/>
+            <path d="M6 9.5v5.8c0 1.4 2.7 2.7 6 2.7s6-1.3 6-2.7V9.5"/>
+          </svg>
+        </div>
+
+        <span class="brand-title">Profesor IA</span>
+
+        <button id="folderBadgeBtn" class="expert-pill" title="Haz clic para cambiar la carpeta de estudio">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+          </svg>
+          <span id="folderBadgeText">Cargando carpeta...</span>
+        </button>
+      </div>
+
+      <div class="topbar-actions">
+        <div id="statusPill" class="status-pill" data-state="idle">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="statusText">Listo</span>
+        </div>
+
+        <!-- 3-Way Cognitive Ergonomic Theme Switcher -->
+        <div id="themeSwitcher" class="theme-switcher" role="group" aria-label="Tema visual de estudio">
+          <button type="button" class="theme-opt active" data-theme-opt="light" title="Papel cálido: máximo descanso visual de día">Papel</button>
+          <button type="button" class="theme-opt" data-theme-opt="sepia" title="Lectura sepia: luz azul mínima para sesiones largas">Sepia</button>
+          <button type="button" class="theme-opt" data-theme-opt="dark" title="Noche slate: oscuro suave sin halación">Noche</button>
+        </div>
+
+        <button id="topbarFullscreenBtn" class="btn btn-sm btn-primary" title="Abrir aula en pantalla completa con 2 pantallas: PDF y Pizarra [Tecla F]">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+          </svg>
+          <span>Pantalla completa</span>
+        </button>
+
+        <button id="exportBtn" class="btn btn-sm" title="Exportar pizarras, fórmulas y transcripción en un HTML sin conexión">Exportar</button>
+        <button id="apiKeyBtn" class="btn btn-sm" title="Configurar clave de Gemini API">API Key</button>
+
+        <button id="toggleRightRailBtn" class="icon-btn active" title="Mostrar u ocultar panel de voz y chat" aria-label="Mostrar u ocultar panel de voz y chat" aria-pressed="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2.5"/>
+            <line x1="15" y1="4" x2="15" y2="20"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- 3-Column Calm Study Studio -->
+    <div class="workspace-grid" id="workspaceGrid">
+      <!-- Left Rail: Clear Quick Start + Progressive Disclosure -->
+      <aside class="panel left-panel" aria-label="Configuración de clase">
+        <div class="panel-scroll">
+          <!-- Primary Action Card: Zero-friction PDF Class Start -->
+          <div class="class-setup-box" id="classSetupBox">
+            <div class="section-head">
+              <h2 class="section-label">Clase sobre PDF</h2>
+              <span id="pdfCountBadge" class="meta-badge">0 PDFs</span>
+            </div>
+
+            <div class="field">
+              <label for="classPdfSelect">Documento de estudio</label>
+              <select id="classPdfSelect"></select>
+            </div>
+
+            <div class="field-row-compact">
+              <div class="field">
+                <label for="classStartPage">Página</label>
+                <input id="classStartPage" type="number" min="1" value="1" />
+              </div>
+              <div class="field">
+                <label for="classStartTopic">O ir a un tema</label>
+                <input id="classStartTopic" type="text" placeholder="ej. Centro de gravedad" />
+              </div>
+            </div>
+
+            <div class="cta-row">
+              <button id="startContinuousClassBtn" class="btn btn-primary cta-main">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <polygon points="6,4 20,12 6,20"/>
+                </svg>
+                <span>Iniciar clase</span>
+              </button>
+              <button id="previewPdfBtn" class="btn" title="Abrir esta página del PDF ahora">Ver PDF</button>
+            </div>
+          </div>
+
+          <!-- Teaching Style Selector -->
+          <div class="section-block">
+            <div class="section-head">
+              <h2 class="section-label">Estilo de clase</h2>
+            </div>
+            <div class="mode-grid" id="modeGrid">
+              <button class="mode-btn mode-btn-wide" data-mode="continuous_class">
+                <span class="mode-title">Clase continua (PDF + Pizarra)</span>
+                <small>Diapositiva a la izquierda y pizarra guiada a la derecha</small>
+              </button>
+              <button class="mode-btn active" data-mode="folder_expert">
+                <span class="mode-title">Experto</span>
+                <small>Adapta tu temario</small>
+              </button>
+              <button class="mode-btn" data-mode="socratic">
+                <span class="mode-title">Socrático</span>
+                <small>Guía con preguntas</small>
+              </button>
+              <button class="mode-btn" data-mode="lecturer">
+                <span class="mode-title">Pizarra visual</span>
+                <small>Esquemas y fórmulas</small>
+              </button>
+              <button class="mode-btn" data-mode="exam">
+                <span class="mode-title">Modo examen</span>
+                <small>Práctica y evaluación</small>
+              </button>
+            </div>
+          </div>
+
+          <!-- Progressive Disclosure Drawer 1: AI Engine, Voice & Language -->
+          <details class="studio-drawer" id="engineDrawer">
+            <summary class="drawer-summary">
+              <span class="drawer-title">
+                <svg class="drawer-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+                <span>Motor IA y voz</span>
+              </span>
+              <span id="engineSummaryBadge" class="drawer-badge">Local $0</span>
+            </summary>
+
+            <div class="drawer-body">
+              <div class="mode-grid" id="engineGrid" style="margin-bottom:12px;">
+                <button class="mode-btn active" data-engine="local">
+                  <span class="mode-title">Local gratis</span>
+                  <small>Ollama · Sin coste</small>
+                </button>
+                <button class="mode-btn" data-engine="gemini">
+                  <span class="mode-title">Gemini Cloud</span>
+                  <small>Voz en directo</small>
+                </button>
+              </div>
+
+              <!-- Local Ollama Controls -->
+              <div id="localEngineFields">
+                <div class="field">
+                  <label for="localModelSelect">Modelo local <span id="ollamaBadge" class="inline-status"></span></label>
+                  <select id="localModelSelect"></select>
+                </div>
+                <div id="quickPullBar" class="quick-pull-bar"></div>
+                <div id="pullProgress" class="pull-progress" style="display:none;"></div>
+                <div class="field">
+                  <label for="localVoiceSelect">Voz del profesor <span id="voiceCapBadge" class="inline-status"></span></label>
+                  <select id="localVoiceSelect"></select>
+                </div>
+                <div class="field">
+                  <label for="localSttSelect">Reconocimiento de voz</label>
+                  <select id="localSttSelect">
+                    <option value="browser" selected>Micrófono del navegador (Instantáneo)</option>
+                    <option value="whisper">Whisper local sin conexión (Espacio)</option>
+                  </select>
+                </div>
+                <label class="checkbox-field">
+                  <input id="localThinkCheck" type="checkbox" />
+                  <span>Razonamiento profundo (&lt;think&gt; · más lento)</span>
+                </label>
+              </div>
+
+              <!-- Cloud Gemini Live Controls -->
+              <div id="geminiEngineFields" style="display:none;">
+                <div class="field">
+                  <label for="modelSelect">Gemini Live (Voz en directo)</label>
+                  <select id="modelSelect"></select>
+                </div>
+                <div class="field">
+                  <label for="geminiClassModelSelect">Gemini Clase (PDF y Pizarra)</label>
+                  <select id="geminiClassModelSelect"></select>
+                </div>
+                <div class="field" id="thinkingField" style="display:none;">
+                  <label for="thinkingSelect">Profundidad de razonamiento</label>
+                  <select id="thinkingSelect">
+                    <option value="low">Ligero — Consulta rápida</option>
+                    <option value="medium" selected>Medio — Resolución guiada</option>
+                    <option value="high">Alto — Demostraciones complejas</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="voiceSelect">Voz de Gemini</label>
+                  <select id="voiceSelect"></select>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="langSelect">Idioma</label>
+                <select id="langSelect">
+                  <option value="auto" selected>Automático (según apuntes)</option>
+                  <option value="es">Español (Castellano)</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
+
+              <div class="field" style="margin-bottom:0;">
+                <label for="topicInput">Enfoque de hoy (opcional)</label>
+                <input id="topicInput" type="text" placeholder="ej. tema 3, Steiner, repaso examen..." />
+              </div>
+            </div>
+          </details>
+
+          <!-- Progressive Disclosure Drawer 2: Study Library & Screen Share -->
+          <details class="studio-drawer" id="libraryDrawer">
+            <summary class="drawer-summary">
+              <span class="drawer-title">
+                <svg class="drawer-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+                <span>Biblioteca y pantalla</span>
+              </span>
+              <span id="fileCountBadge" class="drawer-badge">0</span>
+            </summary>
+
+            <div class="drawer-body">
+              <div class="share-row">
+                <button id="screenShareBtn" class="btn btn-sm" style="flex:1;">Compartir pantalla</button>
+                <button id="attachImageBtn" class="btn btn-sm" style="flex:1;">Subir imagen</button>
+                <input id="imageInput" type="file" accept="image/*" hidden />
+              </div>
+
+              <div id="visionBox" class="vision-box">
+                <video id="screenVideo" autoplay playsinline muted></video>
+                <div class="vision-controls">
+                  <button id="snapFrameBtn" class="btn btn-sm btn-primary" style="flex:1;">Enviar captura</button>
+                  <button id="stopScreenBtn" class="btn btn-sm btn-danger">Detener</button>
+                </div>
+              </div>
+
+              <div id="dropzone" class="dropzone" tabindex="0">
+                Arrastra aquí PDF, PPTX, XLSX, DOCX o MD
+                <input id="fileInput" type="file" accept=".pdf,.pptx,.xlsx,.docx,.md,.txt,.html,.htm,.csv" multiple hidden />
+              </div>
+              <div id="fileList" class="file-list"></div>
+            </div>
+          </details>
+        </div>
+      </aside>
+
+      <!-- Center Stage: PDF Projector + Live Chalkboard + Interactive Labs -->
+      <main class="panel center-panel">
+        <div class="stage-toolbar">
+          <div class="stage-heading">
+            <span class="stage-title" id="stageHeaderTitle">Mesa de estudio</span>
+          </div>
+          <div class="stage-tools">
+            <button id="replayDrawBtn" class="btn btn-sm" disabled title="Repetir la animación paso a paso del dibujo">Repetir dibujo</button>
+            <button id="toggleInkBtn" class="btn btn-sm" title="Rodea o señala cualquier zona de la pizarra o PDF para preguntar al profesor">Señalar / Dibujar</button>
+            <div id="penDots" class="pen-dots">
+              <button class="pen-dot active" data-color="#e11d48" style="background:#e11d48;" title="Lápiz carmesí"></button>
+              <button class="pen-dot" data-color="#d97706" style="background:#d97706;" title="Lápiz ámbar"></button>
+              <button class="pen-dot" data-color="#2563eb" style="background:#2563eb;" title="Lápiz azul"></button>
+            </div>
+            <button id="sendSketchBtn" class="btn btn-sm btn-emerald" style="display:none;">Enviar trazo</button>
+            <button id="clearInkBtn" class="btn btn-sm" style="display:none;">Borrar tinta</button>
+            <button id="clearBoardBtn" class="btn btn-sm">Limpiar</button>
+          </div>
+        </div>
+
+        <!-- Live Class & Dual-Screen Classroom Control Bar -->
+        <div id="classBar" class="class-bar">
+          <div class="class-bar-left">
+            <div class="surface-switch" role="tablist" aria-label="Diseño del aula">
+              <button id="surfaceSplitBtn" class="surface-tab active" data-surface="split" title="PDF a la izquierda y Pizarra Viva a la derecha">Doble pantalla</button>
+              <button id="surfacePdfBtn" class="surface-tab" data-surface="pdf" title="Ver solo el documento PDF">Solo PDF</button>
+              <button id="surfaceCanvasBtn" class="surface-tab" data-surface="canvas" title="Ver solo la pizarra">Solo pizarra</button>
+            </div>
+            <div id="pdfNavControls" class="pdf-nav-controls">
+              <button id="pdfPrevBtn" class="btn btn-sm btn-icon-compact" title="Página anterior" aria-label="Página anterior">‹</button>
+              <span class="pdf-page-indicator">
+                Pág. <input id="pdfPageInput" type="number" min="1" value="1" aria-label="Número de página" /> / <span id="pdfTotalPages">1</span>
+              </span>
+              <button id="pdfNextBtn" class="btn btn-sm btn-icon-compact" title="Página siguiente" aria-label="Página siguiente">›</button>
+              <button id="clearPdfAnnBtn" class="btn btn-sm" title="Borrar anotaciones del profesor en esta página">Limpiar trazos</button>
+            </div>
+          </div>
+
+          <div class="class-bar-right">
+            <span id="bufferBadge" class="buffer-badge" style="display:none;" title="Páginas preparadas con antelación">Buffer: +0</span>
+            <span id="classStatePill" class="class-state-pill" data-state="idle">PDF listo</span>
+            <button id="skipBeatBtn" class="btn btn-sm" style="display:none;" title="Pasar al siguiente bloque al instante [Tecla N]">Siguiente paso</button>
+            <button id="nextPageNowBtn" class="btn btn-sm" style="display:none;" title="Avanzar a la siguiente página [Shift+→]">Sig. pág</button>
+            <button id="verifyRecoverBtn" class="btn btn-sm" style="display:none;" title="Comprueba audio y cola; reanuda si algo se detuvo">Verificar</button>
+            <button id="classPauseResumeBtn" class="btn btn-sm btn-amber" style="display:none;">Pausar</button>
+            <button id="fsInterruptBtn" class="btn btn-sm btn-amber fs-only" title="Interrumpir al profesor para hacer una pregunta">Preguntar</button>
+            <button id="fsCaptionToggleBtn" class="btn btn-sm fs-only" title="Mostrar u ocultar subtítulos en pantalla completa">Subtítulos</button>
+            <button id="classroomFullscreenBtn" class="btn btn-sm btn-primary" title="Alternar pantalla completa [Tecla F]">Pantalla completa</button>
+          </div>
+        </div>
+
+        <div id="stageViewport" class="stage-viewport">
+          <div id="bufferBanner" class="buffer-banner">
+            <div class="buffer-banner-row">
+              <span class="buffer-spinner" aria-hidden="true"></span>
+              <span id="bufferBannerText">Preparando clase por adelantado...</span>
+            </div>
+            <div class="buffer-track"><div id="bufferFill" class="buffer-fill"></div></div>
+          </div>
+
+          <div id="mathStrip" class="math-strip">
+            <span id="mathStripText"></span>
+            <button id="closeMathStrip" class="btn btn-sm btn-icon-compact" aria-label="Cerrar verificación">×</button>
+          </div>
+
+          <!-- Dual-Screen Classroom Stage (PDF Projector Left | Live Chalkboard Right) -->
+          <div id="dualStageContainer" class="dual-stage" data-layout="canvas">
+            <section id="pdfPane" class="stage-pane pdf-pane" aria-label="Proyector PDF">
+              <div id="pdfStageMount" class="pane-mount">
+                <div class="pane-placeholder">
+                  <div class="pane-placeholder-icon" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                      <line x1="16" y1="13" x2="8" y2="13"/>
+                      <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                  </div>
+                  <strong>Proyector de apuntes</strong>
+                  <p>Elige un documento a la izquierda y pulsa <em>Iniciar clase</em> para ver las diapositivas aquí.</p>
+                </div>
+              </div>
+            </section>
+
+            <div id="stageSplitter" class="stage-splitter" role="separator" aria-orientation="vertical" title="Arrastra para ajustar el ancho (doble clic para 50% / 50%)">
+              <span class="splitter-grip" aria-hidden="true"></span>
+            </div>
+
+            <section id="boardPane" class="stage-pane board-pane" aria-label="Pizarra Viva del Profesor">
+              <div id="boardStageMount" class="pane-mount">
+                <div class="empty-board" id="emptyBoard">
+                  <h2 id="welcomeTitle">Tu estudio está listo</h2>
+                  <p id="welcomeDesc">
+                    Selecciona tus apuntes a la izquierda y pulsa <strong>Iniciar clase</strong>. Verás el PDF proyectado junto a esquemas y fórmulas paso a paso.
+                  </p>
+                  <div class="starter-chips" id="starterChips"></div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <!-- Fullscreen Floating Caption & Quick-Ask HUD -->
+        <div id="fullscreenCaptionBar" class="fs-caption-bar">
+          <div class="fs-caption-live">
+            <span id="fsVoiceDot" class="fs-voice-dot" data-state="idle"></span>
+            <span id="fsCaptionText" class="fs-caption-text">Aula en doble pantalla lista · Pulsa F para salir o escribe tu pregunta.</span>
+          </div>
+          <form id="fsQuickAskForm" class="fs-quick-ask">
+            <input id="fsQuickAskInput" type="text" placeholder="Pregunta o interrumpe al profesor..." autocomplete="off" />
+            <button type="submit" class="btn btn-sm btn-primary">Enviar</button>
+          </form>
+        </div>
+
+        <!-- Filmstrip Scene Switcher -->
+        <div id="sceneFilmstrip" class="scene-filmstrip">
+          <span class="filmstrip-empty">Las pizarras de la sesión aparecerán aquí para volver atrás cuando quieras.</span>
+        </div>
+      </main>
+
+      <!-- Right Rail: Calm Voice Console & Live Transcript -->
+      <section class="panel right-panel" aria-label="Voz y conversación">
+        <div class="voice-stage">
+          <div id="orbWrap" class="orb-wrap" data-state="idle">
+            <div id="orbRing" class="orb-ring"></div>
+            <button id="orbBtn" class="orb-core" title="Iniciar o finalizar la sesión de voz" aria-label="Iniciar o finalizar la sesión de voz">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" x2="12" y1="19" y2="22"/>
+              </svg>
+            </button>
+          </div>
+          <div id="voiceStateText" class="voice-state-text">Listo para empezar</div>
+          <div class="voice-hint">Habla cuando quieras o pulsa <kbd>Esc</kbd> para interrumpir</div>
+
+          <div class="voice-controls">
+            <button id="connectBtn" class="btn btn-primary">Iniciar voz</button>
+            <button id="muteBtn" class="btn" disabled>Silenciar</button>
+            <button id="echoBtn" class="btn btn-sm btn-emerald" title="Evita que el sonido de los altavoces interrumpa al profesor. Desactívalo solo con auriculares.">Anti-eco: ON</button>
+            <button id="interruptBtn" class="btn btn-sm btn-amber" disabled>Interrumpir (Esc)</button>
+            <button id="testAudioBtn" class="btn btn-sm" title="Comprueba que escuchas la voz del profesor">Probar voz</button>
+            <button id="pttBtn" class="btn btn-sm" disabled>Espacio PTT (OFF)</button>
+          </div>
+        </div>
+
+        <div class="transcript-head">
+          <span>Transcripción en vivo</span>
+          <button id="clearTranscriptBtn" class="btn btn-sm btn-ghost">Limpiar</button>
+        </div>
+
+        <div id="transcriptList" class="transcript-list"></div>
+
+        <form id="textForm" class="chat-input-bar">
+          <input id="textInput" type="text" placeholder="Haz una pregunta o pide un esquema..." autocomplete="off" />
+          <button id="sendTextBtn" type="submit" class="btn btn-primary btn-sm">Enviar</button>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <!-- API Key Modal -->
+  <div id="apiKeyModal" class="modal-backdrop">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="apiKeyModalTitle">
+      <h3 id="apiKeyModalTitle">Configurar clave de Gemini API</h3>
+      <p>
+        Se guarda localmente en <code>~/.config/speaking-professor/.env</code> (<code>chmod 600</code>) para funcionar desde cualquier carpeta.
+        Puedes crear una clave en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>.
+      </p>
+      <div class="field">
+        <label for="apiKeyInput">GEMINI_API_KEY</label>
+        <input id="apiKeyInput" type="password" placeholder="AIza..." />
+      </div>
+      <div id="apiKeyStatus" class="modal-status"></div>
+      <div class="modal-actions">
+        <button id="closeModalBtn" class="btn">Cancelar</button>
+        <button id="saveApiKeyBtn" class="btn btn-primary">Guardar clave</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Switch Folder Modal -->
+  <div id="folderModal" class="modal-backdrop">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="folderModalTitle">
+      <h3 id="folderModalTitle">Cambiar carpeta de estudio</h3>
+      <p>
+        Indica cualquier carpeta de tu Mac con PDFs, presentaciones, apuntes u hojas de cálculo.
+        El profesor analizará el contenido y se adaptará al temario al instante.
+      </p>
+      <div class="field">
+        <label for="folderPathInput">Ruta de la carpeta</label>
+        <input id="folderPathInput" type="text" placeholder="~/Desktop/Mi_Asignatura" />
+      </div>
+      <div id="folderModalStatus" class="modal-status"></div>
+      <div class="modal-actions">
+        <button id="closeFolderModalBtn" class="btn">Cancelar</button>
+        <button id="switchFolderBtn" class="btn btn-primary">Cambiar y adaptar</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

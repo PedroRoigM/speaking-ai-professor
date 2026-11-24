@@ -1,0 +1,276 @@
+# Speaking AI Professor — Dual-Screen Live Classroom Stage
+
+> **A real-time speaking AI tutor and interactive classroom studio** that projects your PDF slides on the left, draws synchronized stroke-by-stroke vector schematics and formulas on a live chalkboard on the right, verifies calculations in Python, and listens to your voice interruptions — running **100% locally and free ($0)** on Apple Silicon (**Ollama + Kokoro-82M Neural TTS + mlx-whisper**) with a **1-click cloud switch** to **Google Gemini 3.8 Live & Gemini 4**.
+
+[![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Ollama Local $0](https://img.shields.io/badge/Local%20AI-Ollama%20%2B%20MLX%20GPU-0F172A)](https://ollama.com/)
+[![Gemini 3.8 Live](https://img.shields.io/badge/Cloud%20AI-Gemini%203.8%20Live%20%2F%204-2563EB?logo=google&logoColor=white)](https://ai.google.dev/)
+[![WCAG AA/AAA](https://img.shields.io/badge/UI-Cognitive%20Ergonomics%20WCAG%20AAA-0D8560)](#cognitive-ergonomic-study-ui)
+[![License: MIT](https://img.shields.io/badge/License-MIT-B45309.svg)](./LICENSE)
+
+[English Overview & Install](#quick-start-2-minutes) · [Architecture](#system-architecture) · [Apple Silicon $0 Setup](#apple-silicon-0-local-neural-studio) · [🇪🇸 Guía Rápida en Español](#-guía-rápida-en-español)
+
+---
+
+## Why I Built This
+
+Most AI study tools dump walls of Markdown text into a chat box. Real engineering and science comprehension works differently: a great professor stands beside your slides, **speaks organically**, **draws progressive diagrams** while highlighting variables with consistent color coding, **verifies every number**, and lets you **interrupt mid-sentence or circle a formula** the instant something feels unclear.
+
+**Speaking AI Professor** turns any folder of study materials (`PDF`, `PPTX`, `XLSX`, `DOCX`, `MD`, `HTML`) into a live, adaptive dual-screen classroom.
+
+---
+
+## Key Features & Engineering Highlights
+
+### 1. Dual-Screen Live Classroom (`50% PDF Projector | 50% Precision Chalkboard`)
+- **Synchronized Audio-Visual Timeline**: Voice narration, progressive SVG layer reveals, laser pointer callouts, and textbook equations stay strictly synchronized beat-by-beat.
+- **Fullscreen 2-Screen Classroom (`F`)**: Hides all chrome, fits the PDF slide and live chalkboard side-by-side with a draggable splitter, and provides a floating live caption & quick-ask HUD.
+- **Interactive Student Ink**: Toggle *Señalar / Dibujar*, circle any term or diagram on either the PDF or the chalkboard, and send the annotated frame straight to the vision model.
+- **Standalone Offline Export**: Export all whiteboards, solved problems, quizzes, and transcripts into a single self-contained HTML study sheet.
+
+### 2. Dual AI Engine — Local $0 (Apple Silicon GPU) or Cloud (Gemini Live)
+| Capability | 💻 Local Free ($0 · Default) | ☁️ Google Gemini Cloud (1-Click) |
+| :--- | :--- | :--- |
+| **Reasoning & Vision** | Ollama (`gemma4:12b`, `qwen3.5:9b`, `qwen3.5-27b`) on Metal GPU | Gemini 3.8 Live (`gemini-3.8-live`) & Gemini 4 Interactions API (`gemini-4-hydrogen` with auto failover to `gemini-3.5-flash-lite`) |
+| **Voice Output (TTS)** | **Kokoro-82M** neural TTS via `mlx-audio` (~210 ms/sentence, 24 kHz) + macOS native fallback | Native Gemini Live real-time bidirectional audio |
+| **Voice Input (STT)** | Instant Browser Speech **or** 100% offline **mlx-whisper** (`Space` PTT) | Full-duplex VAD with Anti-Echo Shield |
+| **Latency Engineering** | Static Prefix KV-Cache reuse + 5-page background lookahead + persistent disk cache | Real-time WebSocket streaming |
+
+### 3. Deterministic 12-Template Parametric Blueprint Engine
+Instead of letting an LLM hallucinate misaligned raw SVG coordinates or blank graphs, the chalkboard uses a deterministic parametric SVG engine (`public/blueprintTemplates.js`) featuring:
+- **12 clean schematic templates** (free-body diagrams, vehicle side/top/front views, 2-DOF quarter-car suspension, force & power balance, tire load sensitivity $\mu(F_z)$ & $F_y(F_z)$, Pacejka slip curve, Kamm friction circle, 3D inertia & Steiner theorem, generic auto-scaled X-Y plotter, and 2-column conceptual comparison).
+- **Automatic Bounding-Box Label Collision Avoider** (`createPlacer()`): guarantees zero overlapping badges or labels.
+- **Unicode-Aware Math Compiler** (`public/stageRenderer.js`): renders clean typographic fractions, square roots, Greek symbols, and accented subscripts (e.g. `μ_teórico`, `F_tracción`) both in HTML and SVG `<tspan>`.
+
+### 4. Reliability & Self-Healing Architecture
+- **5-Layer Anti-Freeze Playback Watchdog**: Isolated timeline execution, `AudioContext.resume()` timeout guard, Web Audio `onended` failsafe timer, client-server 2.5s health heartbeat, and automatic queue recovery (`✓ Verificar`, `Siguiente paso [N]`, `Sig. pág [Shift+→]`).
+- **Python Math Verifier** (`lib/mathVerifier.mjs`): Sandboxed local Python verification for numerical derivations with automatic variable capture.
+- **Apple Silicon Unified Memory Hygiene**: Caps MLX scratch cache (`256 MB`) and configures Ollama (`OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_KV_CACHE_TYPE=q8_0`) so LLM weights and neural TTS coexist smoothly in 24 GB Unified Memory without swap.
+
+### 5. Cognitive-Ergonomic Study UI
+Designed around **John Sweller's Cognitive Load Theory** and **Richard Mayer's Multimedia Learning Principles**:
+- **3 Science-Backed Reading Themes**: **Papel cálido** (warm off-white default, zero glare), **Sepia** (minimal blue light for long sessions), and **Noche slate** (low-halation midnight slate — never pure `#000`), all mathematically verified to **WCAG AA/AAA** contrast (`13.9:1–15.8:1` body ink).
+- **Physical Classroom Contrast**: The SVG drafting board remains a calm matte slate chalkboard across all 3 themes so vector curves stay razor-sharp beside warm paper notes.
+- **Progressive Disclosure & Focus Mode**: One primary action card at top, collapsible drawers for advanced AI/library controls, and 1-click left/right sidebar collapse toggles.
+
+---
+
+## System Architecture
+
+```mermaid
+flowchart LR
+    UI["Browser Study Studio\n(Dual-Screen PDF + SVG Chalkboard\n+ Web Audio + Student Ink)"]
+    WS["Node.js HTTP + WebSocket Server\n(server.mjs)"]
+    LIB["Adaptive Study Library\n(PDF / PPTX / XLSX / DOCX / MD)"]
+    PDF["Poppler PDF Stage\n(pdftoppm + pdftotext + Prefetch)"]
+    ENG["Lookahead Class Timeline Engine\n(5-page buffer + Disk Cache + Watchdog)"]
+    LOC["Local AI Stack ($0)\nOllama GPU + Kokoro MLX TTS\n+ mlx-whisper STT"]
+    CLD["Cloud AI Stack\nGemini 3.8 Live +\nGemini 4 Interactions API"]
+    PY["Python Math Verifier\n(sandboxed math checks)"]
+
+    UI <-->|"WebSocket (audio, beats, ink, health)"| WS
+    WS --> LIB
+    WS --> PDF
+    WS --> ENG
+    ENG <--> LOC
+    ENG <--> CLD
+    WS <--> PY
+```
+
+---
+
+## Quick Start (2 Minutes)
+
+### Prerequisites
+- **Node.js 20+** ([nodejs.org](https://nodejs.org/))
+- **Poppler** (for rendering PDF slides):
+  - macOS: `brew install poppler`
+  - Ubuntu / Debian: `sudo apt install poppler-utils`
+  - Windows: [poppler-windows](https://github.com/oschwartz10612/poppler-windows/releases) (add `bin/` to `PATH`)
+- **Python 3.10+** (for math verification & Office document extraction)
+- **At least one AI backend**:
+  - **Local Free ($0)**: [Ollama](https://ollama.com/) + `ollama pull gemma4:12b` *(or `qwen3.5:9b`)*
+  - **Or Cloud**: a free/paid `GEMINI_API_KEY` from [Google AI Studio](https://aistudio.google.com/apikey)
+
+### Option A — Automated Installer (macOS / Linux)
+
+```bash
+git clone https://github.com/PedroRoigM/speaking-ai-professor.git
+cd speaking-ai-professor
+
+# Standard setup (Node deps + Poppler check + diagnostics):
+chmod +x install.sh
+./install.sh
+
+# Launch with built-in sample notes:
+npm start
+```
+
+> **Apple Silicon Mac (M1 / M2 / M3 / M4) Full $0 Studio**:
+> ```bash
+> ./install.sh --all
+> ollama pull gemma4:12b
+> ```
+> Installs Node dependencies, Poppler, `espeak-ng`, Python `.venv` with **Kokoro-82M neural TTS** & **mlx-whisper**, applies Metal GPU tuning for Ollama, and registers the global `professor` CLI!
+
+### Option B — Manual Install (macOS / Linux / Windows)
+
+```bash
+git clone https://github.com/PedroRoigM/speaking-ai-professor.git
+cd speaking-ai-professor
+npm install
+
+# Optional: configure Gemini API key (or paste it inside the UI's "API Key" button)
+cp .env.example .env
+
+# Run built-in 6-point health verification
+npm run verify
+
+# Launch on http://localhost:3456
+npm start
+```
+
+### Launch on ANY Course Folder
+
+Run directly against any folder containing PDFs, slides, spreadsheets, or notes:
+
+```bash
+node server.mjs --dir "/path/to/your/course-folder" --open
+```
+
+Or link the global CLI once so you can type `professor` inside **any** folder:
+
+```bash
+npm link
+cd /path/to/any/study-folder
+professor
+```
+
+---
+
+## Apple Silicon $0 Local Neural Studio
+
+To get **unlimited, zero-cost, 100% private** classes with natural Spanish & English neural voice on macOS Apple Silicon:
+
+1. **Install Ollama & pull a vision-capable model**:
+   ```bash
+   brew install ollama
+   brew services start ollama
+   ollama pull gemma4:12b      # Best balance: vision + STEM reasoning (~7.7 GB)
+   # or: ollama pull qwen3.5:9b # Ultra-fast (~60 tok/s, vision)
+   ```
+2. **Optimize Ollama for Unified Memory & Metal GPU** (Flash Attention + `q8_0` KV-cache):
+   ```bash
+   bash scripts/optimize_mac_gpu.sh
+   ```
+3. **Install Kokoro-82M Neural TTS + mlx-whisper STT** (optional — macOS native voices work without this):
+   ```bash
+   brew install espeak-ng
+   python3 -m venv .venv
+   .venv/bin/pip install -r requirements-voice.txt
+   ```
+4. **Verify everything is green**:
+   ```bash
+   npm run verify
+   ```
+
+---
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+| :--- | :--- |
+| `F` | Toggle **Fullscreen 2-Screen Classroom** (`PDF 50% \| Chalkboard 50%`) |
+| `N` | Skip immediately to the next explanation beat / drawing layer |
+| `Shift + →` / `Shift + ←` | Jump to next / previous PDF page |
+| `Esc` | Interrupt professor immediately (or exit fullscreen) |
+| `Space` *(hold)* | Push-to-Talk when using Offline Whisper or PTT mode |
+
+---
+
+## Project Structure
+
+```text
+speaking-ai-professor/
+├── server.mjs                    # HTTP + WebSocket classroom server & session router
+├── bin/professor.mjs             # Global CLI launcher (`professor`)
+├── install.sh                    # One-command macOS/Linux installer
+├── requirements-voice.txt        # Optional Apple Silicon MLX neural voice deps
+├── lib/
+│   ├── classTimeline.mjs         # Lookahead class engine, disk cache & self-heal watchdog
+│   ├── classDirector.mjs         # Dual-screen session state & pacing coordinator
+│   ├── pdfStage.mjs              # Parallel Poppler PDF renderer, OCR/text & prefetch
+│   ├── studyLibrary.mjs          # Multi-format indexer (PDF/PPTX/XLSX/DOCX/MD/HTML)
+│   ├── localProfessor.mjs        # Ollama Metal GPU client & model manager
+│   ├── localVoice.mjs            # Node bridge for Kokoro-82M / mlx-whisper / macOS TTS
+│   ├── voice_worker.py           # Persistent MLX GPU voice worker (256 MB cache cap)
+│   ├── mathVerifier.mjs          # Sandboxed Python math verification engine
+│   ├── professorConfig.mjs       # Gemini 3.8 Live / 4 configs & tool declarations
+│   ├── professorSoulPrompt.mjs   # Organic pedagogical system instructions
+│   └── visualCraftPrompt.mjs     # Diagram & visual clarity guidelines
+├── public/
+│   ├── index.html                # Progressive-disclosure study studio UI
+│   ├── styles.css                # 3-theme WCAG AA/AAA cognitive-ergonomic stylesheet
+│   ├── app.js                    # Web Audio engine, WebSocket client & dual-screen stage
+│   ├── stageRenderer.js          # Unicode math compiler, PDF annotations & SVG animator
+│   ├── blueprintTemplates.js     # 12 deterministic parametric SVG templates + collision avoider
+│   └── pcm-processor.js          # Low-latency AudioWorklet microphone capture
+├── scripts/
+│   ├── verify_classroom.mjs      # 6-point automated diagnostic & self-heal test suite
+│   ├── optimize_mac_gpu.sh       # Apple Silicon Ollama Metal / MLX tuning script
+│   └── test-connection.mjs       # Live Gemini API connectivity check
+└── examples/
+    └── sample_study_notes.md     # Out-of-the-box sample notes to try immediately
+```
+
+---
+
+## 🇪🇸 Guía Rápida en Español
+
+**Profesor IA** convierte cualquier carpeta de apuntes (`PDF`, `PPTX`, `XLSX`, `DOCX`, `MD`) en un **aula interactiva de doble pantalla** con un profesor que habla contigo en tiempo real, dibuja esquemas precisos en la pizarra mientras proyecta tus diapositivas, verifica fórmulas con Python y te permite interrumpirle o rodear dudas sobre la pantalla.
+
+### Características principales
+- **Modo 100 % Local y Gratis ($0)** en Apple Silicon con **Ollama** (`gemma4:12b` / `qwen3.5:9b`) + voz neuronal **Kokoro-82M** + **mlx-whisper**, o cambio en 1 clic a **Gemini 3.8 Live / Gemini 4** en la nube.
+- **Aula en Doble Pantalla (`F`)**: proyector PDF a la izquierda y pizarra paramétrica sin solapes a la derecha.
+- **Estética ergonómica de estudio**: 3 temas pensados para reducir la fatiga visual (**Papel cálido** por defecto, **Sepia** sin luz azul y **Noche slate**), paneles laterales colapsables y divulgación progresiva.
+- **Watchdog anti-bloqueos en 5 capas** y botón `Verificar` para que la clase nunca se quede parada.
+
+### Instalación rápida (2 minutos)
+
+```bash
+git clone https://github.com/PedroRoigM/speaking-ai-professor.git
+cd speaking-ai-professor
+chmod +x install.sh
+
+# Opción 1: Instalación estándar (Node + comprobación de Poppler)
+./install.sh
+
+# Opción 2: Mac Apple Silicon (M1/M2/M3/M4) con voz neuronal local $0 + CLI global `professor`
+./install.sh --all
+ollama pull gemma4:12b
+```
+
+### Cómo usarlo en cualquier carpeta de estudios
+
+```bash
+# Probar ahora mismo con los apuntes de ejemplo:
+npm start
+
+# O abrir directamente sobre tu carpeta de la universidad:
+node server.mjs --dir "/ruta/a/tu/carpeta-de-apuntes" --open
+
+# Si instalaste con --link-cli o `npm link`, entra en cualquier carpeta y ejecuta:
+professor
+```
+
+### Verificación del sistema
+Antes o después de instalar, puedes comprobar que todo funciona al 100 % ejecutando:
+```bash
+npm run verify
+```
+
+---
+
+## License
+
+Released under the [MIT License](./LICENSE). Built by **Pedro Roig** (`@PedroRoigM`).

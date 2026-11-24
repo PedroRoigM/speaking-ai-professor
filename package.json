@@ -1,0 +1,44 @@
+{
+  "name": "speaking-ai-professor",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Real-time dual-screen Speaking AI Professor with PDF projection, parametric SVG chalkboard, Python math verification, cognitive-ergonomic UI, and 100% local ($0 Apple Silicon Ollama + Kokoro MLX) or Gemini Live Cloud modes.",
+  "license": "MIT",
+  "author": "Pedro Roig <pedro.roig.morera@gmail.com>",
+  "homepage": "https://github.com/PedroRoigM/speaking-ai-professor#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PedroRoigM/speaking-ai-professor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/PedroRoigM/speaking-ai-professor/issues"
+  },
+  "keywords": [
+    "ai-tutor",
+    "speaking-professor",
+    "ollama",
+    "mlx",
+    "kokoro-tts",
+    "gemini-live-api",
+    "interactive-whiteboard",
+    "edtech",
+    "apple-silicon",
+    "pdf-study"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "bin": {
+    "professor": "./bin/professor.mjs"
+  },
+  "scripts": {
+    "start": "node server.mjs --open",
+    "dev": "node --watch server.mjs",
+    "verify": "node scripts/verify_classroom.mjs",
+    "test:gemini": "node scripts/test-connection.mjs"
+  },
+  "dependencies": {
+    "@google/genai": "^3.6.1",
+    "ws": "^8.18.0"
+  }
+}
