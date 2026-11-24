@@ -10,7 +10,18 @@
 
 [English Overview & Install](#quick-start-2-minutes) · [Architecture](#system-architecture) · [Apple Silicon $0 Setup](#apple-silicon-0-local-neural-studio) · [🇪🇸 Guía Rápida en Español](#-guía-rápida-en-español)
 
-![Speaking AI Professor — Dual-Screen Study Studio](./docs/studio-preview.png)
+![Speaking AI Professor — Dual-Screen Classroom (Claro Studio)](./docs/linkedin_pack/02_doble_pantalla_claro.png)
+
+<details>
+<summary>More screenshots: Noche Obsidian + Python Math Verifier · Welcome Studio · Dual Engine Settings</summary>
+
+![Dual-Screen Classroom — Noche Obsidian + Python Verification](./docs/linkedin_pack/03_doble_pantalla_noche.png)
+
+![Welcome Studio — Claro](./docs/linkedin_pack/01_studio_claro.png)
+
+![Local $0 (Ollama + Kokoro MLX) & Gemini Cloud Settings](./docs/linkedin_pack/04_ajustes_motor_ia.png)
+
+</details>
 
 ---
 

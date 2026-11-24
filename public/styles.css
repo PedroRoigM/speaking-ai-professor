@@ -1622,9 +1622,11 @@ textarea::placeholder {
   gap: 8px;
 }
 .engine-card {
+  flex-direction: column;
+  gap: 3px;
   border: 1px solid var(--border);
   background: var(--canvas-subtle);
-  padding: 10px 12px;
+  padding: 11px 13px;
   border-radius: var(--radius-sm);
 }
 .engine-card.active {
