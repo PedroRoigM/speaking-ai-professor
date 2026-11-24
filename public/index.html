@@ -29,7 +29,10 @@
         <span class="brand-title">Profesor IA</span>
         <span class="brand-sep" aria-hidden="true">/</span>
 
-        <button id="folderBadgeBtn" class="breadcrumb-btn" title="Cambiar carpeta de estudio">
+        <button id="folderBadgeBtn" class="breadcrumb-btn" title="Cambiar carpeta de estudio (abre el selector de carpetas)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+          </svg>
           <span id="folderBadgeText">Cargando carpeta...</span>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <polyline points="6 9 12 15 18 9"/>
@@ -537,22 +540,30 @@
     </div>
   </div>
 
-  <!-- Switch Folder Modal -->
+  <!-- Visual Folder Browser Modal (automatic fallback if native OS picker is unavailable) -->
   <div id="folderModal" class="modal-backdrop">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="folderModalTitle">
-      <h2 id="folderModalTitle">Cambiar carpeta de estudio</h2>
-      <p>
-        Indica cualquier carpeta con PDFs, presentaciones, apuntes u hojas de cálculo.
-        El profesor analizará el contenido y se adaptará al temario al instante.
-      </p>
-      <div class="field">
-        <label for="folderPathInput">Ruta de la carpeta</label>
-        <input id="folderPathInput" type="text" placeholder="~/Desktop/Mi_Asignatura" />
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="folderModalTitle">
+      <div class="modal-header">
+        <div>
+          <h2 id="folderModalTitle">Elegir carpeta de estudio</h2>
+          <p class="modal-subtitle">Navega por tus carpetas y selecciona la que contiene tus apuntes.</p>
+        </div>
+        <button id="pickNativeFolderBtn" type="button" class="btn btn-xs btn-subtle">Abrir Finder / Sistema</button>
       </div>
+
+      <div id="folderShortcuts" class="folder-shortcuts"></div>
+
+      <div class="folder-nav-bar">
+        <button id="folderUpBtn" type="button" class="btn btn-xs btn-subtle" title="Subir a la carpeta padre">↑ Subir</button>
+        <input id="folderPathInput" type="text" readonly aria-label="Carpeta actual seleccionada" />
+      </div>
+
+      <div id="folderBrowserList" class="folder-browser-list" role="listbox" aria-label="Subcarpetas"></div>
+
       <div id="folderModalStatus" class="modal-status"></div>
       <div class="modal-actions">
-        <button id="closeFolderModalBtn" class="btn btn-subtle">Cancelar</button>
-        <button id="switchFolderBtn" class="btn btn-primary">Cambiar carpeta</button>
+        <button id="closeFolderModalBtn" type="button" class="btn btn-subtle">Cancelar</button>
+        <button id="switchFolderBtn" type="button" class="btn btn-primary">Usar esta carpeta</button>
       </div>
     </div>
   </div>

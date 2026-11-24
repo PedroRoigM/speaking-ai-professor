@@ -2799,18 +2799,127 @@ function renderWelcomeBoard() {
   wrap.appendChild(box);
 }
 
-// Switch Folder Modal
-$('folderBadgeBtn').addEventListener('click', () => {
-  $('folderPathInput').value = state.workspaceRoot || '';
+// Native OS Folder Picker (Finder / Zenity / Windows) + Visual Folder Browser Fallback
+let pickingFolder = false;
+let browseParentPath = null;
+
+function applySwitchedFolderData(data) {
+  state.pdfView = null;
+  state.scenes = [];
+  state.activeSceneIdx = -1;
+  state.activeLabIframe = null;
+  populatePdfSelector(data.pdfs || []);
+  applyDomainProfile(data.domainProfile);
+  renderFileList(data.files || []);
+  setStageLayout('canvas');
+  $('stageHeaderTitle').textContent = 'Mesa de estudio';
+  renderWelcomeBoard();
+  renderFilmstrip();
+  $('folderModal').classList.remove('open');
+  appendTranscript(
+    'system',
+    `Carpeta cambiada a "${data.domainProfile.folderName}" (${data.domainProfile.activeFiles} archivos indexados).`,
+  );
+  if (state.connected) {
+    disconnectSession('Carpeta cambiada · Listo');
+  }
+  syncClassBarUi();
+}
+
+async function loadFolderBrowser(dirPath) {
+  const listEl = $('folderBrowserList');
+  if (listEl) listEl.innerHTML = '<div class="folder-empty">Cargando carpetas...</div>';
+  try {
+    const res = await fetch(`/api/folder/browse?dir=${encodeURIComponent(dirPath || state.workspaceRoot || '')}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'No se pudo leer la carpeta');
+    $('folderPathInput').value = data.current || '';
+    browseParentPath = data.parent || null;
+    if ($('folderUpBtn')) $('folderUpBtn').disabled = !browseParentPath;
+
+    const scWrap = $('folderShortcuts');
+    if (scWrap) {
+      scWrap.innerHTML = '';
+      for (const sc of data.shortcuts || []) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn btn-xs btn-subtle';
+        b.textContent = sc.label;
+        b.addEventListener('click', () => loadFolderBrowser(sc.fullPath));
+        scWrap.appendChild(b);
+      }
+    }
+
+    if (listEl) {
+      listEl.innerHTML = '';
+      if (!data.dirs?.length) {
+        listEl.innerHTML = '<div class="folder-empty">No hay subcarpetas aquí. Pulsa «Usar esta carpeta» para seleccionarla.</div>';
+      } else {
+        for (const d of data.dirs) {
+          const row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'folder-row';
+          row.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+            </svg>
+            <span>${escapeHtml(d.name)}</span>
+          `;
+          row.addEventListener('click', () => loadFolderBrowser(d.fullPath));
+          listEl.appendChild(row);
+        }
+      }
+    }
+  } catch (err) {
+    $('folderModalStatus').textContent = err.message;
+  }
+}
+
+async function openVisualFolderModal() {
   $('folderModalStatus').textContent = '';
   $('folderModal').classList.add('open');
-  $('folderPathInput').focus();
+  await loadFolderBrowser(state.workspaceRoot || '');
+}
+
+async function triggerNativeFolderPicker() {
+  if (pickingFolder) return;
+  pickingFolder = true;
+  const badgeBtn = $('folderBadgeBtn');
+  const badgeText = $('folderBadgeText');
+  const prevText = badgeText.textContent;
+  badgeBtn.disabled = true;
+  badgeText.textContent = 'Eligiendo carpeta...';
+
+  try {
+    const res = await fetch('/api/folder/pick', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok && !data.cancelled) {
+      applySwitchedFolderData(data);
+    } else if (data.ok && data.cancelled) {
+      badgeText.textContent = prevText;
+    } else {
+      badgeText.textContent = prevText;
+      await openVisualFolderModal();
+    }
+  } catch {
+    badgeText.textContent = prevText;
+    await openVisualFolderModal();
+  } finally {
+    badgeBtn.disabled = false;
+    pickingFolder = false;
+  }
+}
+
+$('folderBadgeBtn').addEventListener('click', triggerNativeFolderPicker);
+$('pickNativeFolderBtn')?.addEventListener('click', triggerNativeFolderPicker);
+$('folderUpBtn')?.addEventListener('click', () => {
+  if (browseParentPath) loadFolderBrowser(browseParentPath);
 });
 $('closeFolderModalBtn').addEventListener('click', () => $('folderModal').classList.remove('open'));
 $('switchFolderBtn').addEventListener('click', async () => {
   const folderPath = $('folderPathInput').value.trim();
   if (!folderPath) return;
-  $('folderModalStatus').textContent = 'Scanning folder & adapting domain expert...';
+  $('folderModalStatus').textContent = 'Indexando carpeta y adaptando al temario...';
   const res = await fetch('/api/folder', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2818,18 +2927,9 @@ $('switchFolderBtn').addEventListener('click', async () => {
   });
   const data = await res.json();
   if (data.ok) {
-    state.pdfView = null;
-    populatePdfSelector(data.pdfs || []);
-    applyDomainProfile(data.domainProfile);
-    renderFileList(data.files || []);
-    $('folderModal').classList.remove('open');
-    appendTranscript('system', `Adapted expert to folder "${data.domainProfile.folderName}" (${data.domainProfile.activeFiles} files).`);
-    if (state.connected) {
-      disconnectSession('Folder switched — click Start Class');
-    }
-    syncClassBarUi();
+    applySwitchedFolderData(data);
   } else {
-    $('folderModalStatus').textContent = data.error || 'Could not open folder.';
+    $('folderModalStatus').textContent = data.error || 'No se pudo abrir la carpeta.';
   }
 });
 

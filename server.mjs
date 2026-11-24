@@ -153,6 +153,136 @@ function readRequestBody(req, maxBytes = 35 * 1024 * 1024) {
   });
 }
 
+function execFilePromise(cmd, args, opts = {}) {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, { maxBuffer: 4 * 1024 * 1024, ...opts }, (err, stdout, stderr) => {
+      if (err) {
+        err.stdout = stdout;
+        err.stderr = stderr;
+        reject(err);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
+}
+
+async function pickNativeFolderDialog(initialDir) {
+  let startDir = initialDir || os.homedir();
+  try {
+    const st = await fs.stat(startDir);
+    if (!st.isDirectory()) startDir = path.dirname(startDir);
+  } catch {
+    startDir = os.homedir();
+  }
+
+  if (process.platform === 'darwin') {
+    const script = [
+      'on run argv',
+      '  set startPath to item 1 of argv',
+      '  set startDir to POSIX file startPath',
+      '  try',
+      '    activate',
+      '    return POSIX path of (choose folder with prompt "Selecciona tu carpeta de estudio" default location startDir)',
+      '  on error number -128',
+      '    return "__CANCELLED__"',
+      '  end try',
+      'end run',
+    ];
+    try {
+      const args = script.flatMap((line) => ['-e', line]);
+      args.push('--', startDir);
+      const { stdout } = await execFilePromise('/usr/bin/osascript', args, { timeout: 180000 });
+      const chosen = String(stdout || '').trim();
+      if (!chosen || chosen === '__CANCELLED__') return { ok: true, cancelled: true };
+      return { ok: true, cancelled: false, folderPath: chosen.replace(/\/+$/, '') || '/' };
+    } catch (err) {
+      return { ok: false, fallbackRequired: true, error: err.message };
+    }
+  }
+
+  if (process.platform === 'linux') {
+    const attempts = [
+      ['zenity', ['--file-selection', '--directory', '--title=Selecciona tu carpeta de estudio', `--filename=${startDir}/`]],
+      ['kdialog', ['--getexistingdirectory', startDir, 'Selecciona tu carpeta de estudio']],
+    ];
+    for (const [bin, args] of attempts) {
+      try {
+        const { stdout } = await execFilePromise(bin, args, { timeout: 180000 });
+        const chosen = String(stdout || '').trim();
+        if (!chosen) return { ok: true, cancelled: true };
+        return { ok: true, cancelled: false, folderPath: chosen };
+      } catch (err) {
+        if (err.code === 1) return { ok: true, cancelled: true };
+        // ENOENT -> try next binary
+      }
+    }
+    return { ok: false, fallbackRequired: true, error: 'No desktop folder picker (zenity/kdialog) available' };
+  }
+
+  if (process.platform === 'win32') {
+    const ps = [
+      'Add-Type -AssemblyName System.Windows.Forms',
+      '$d = New-Object System.Windows.Forms.FolderBrowserDialog',
+      '$d.Description = "Selecciona tu carpeta de estudio"',
+      '$d.SelectedPath = $env:PROF_START_DIR',
+      'if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $d.SelectedPath } else { Write-Output "__CANCELLED__" }',
+    ].join('; ');
+    try {
+      const { stdout } = await execFilePromise('powershell.exe', ['-NoProfile', '-STA', '-Command', ps], {
+        timeout: 180000,
+        env: { ...process.env, PROF_START_DIR: startDir },
+      });
+      const chosen = String(stdout || '').trim();
+      if (!chosen || chosen === '__CANCELLED__') return { ok: true, cancelled: true };
+      return { ok: true, cancelled: false, folderPath: chosen };
+    } catch (err) {
+      return { ok: false, fallbackRequired: true, error: err.message };
+    }
+  }
+
+  return { ok: false, fallbackRequired: true, error: 'Unsupported platform for native folder dialog' };
+}
+
+async function listBrowseDirectory(dirPath) {
+  const home = os.homedir();
+  let current = path.resolve(String(dirPath || '').trim().replace(/^~/, home) || library?.workspaceRoot || home);
+  try {
+    const st = await fs.stat(current);
+    if (!st.isDirectory()) current = path.dirname(current);
+  } catch {
+    current = home;
+  }
+
+  const entries = await fs.readdir(current, { withFileTypes: true }).catch(() => []);
+  const dirs = entries
+    .filter((e) => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules' && e.name !== '__pycache__')
+    .map((e) => ({ name: e.name, fullPath: path.join(current, e.name) }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+  const shortcuts = [];
+  for (const [label, target] of [
+    ['Escritorio', path.join(home, 'Desktop')],
+    ['Documentos', path.join(home, 'Documents')],
+    ['Descargas', path.join(home, 'Downloads')],
+    ['Inicio', home],
+  ]) {
+    try {
+      const st = await fs.stat(target);
+      if (st.isDirectory()) shortcuts.push({ label, fullPath: target });
+    } catch {}
+  }
+
+  const parent = path.dirname(current);
+  return {
+    ok: true,
+    current,
+    parent: parent !== current ? parent : null,
+    dirs,
+    shortcuts,
+  };
+}
+
 function sendJson(res, status, data) {
   const payload = JSON.stringify(data);
   res.writeHead(status, {
@@ -332,6 +462,37 @@ const server = http.createServer(async (req, res) => {
       const body = JSON.parse((await readRequestBody(req, 1024 * 16)).toString('utf8') || '{}');
       await saveApiKey(body.apiKey);
       return sendJson(res, 200, { ok: true, hasApiKey: true });
+    }
+
+    if (req.method === 'POST' && pathname === '/api/folder/pick') {
+      const picked = await pickNativeFolderDialog(library.workspaceRoot || TARGET_DIR);
+      if (!picked.ok) {
+        return sendJson(res, 200, {
+          ok: false,
+          fallbackRequired: true,
+          error: picked.error || 'Native folder picker unavailable',
+        });
+      }
+      if (picked.cancelled) {
+        return sendJson(res, 200, { ok: true, cancelled: true });
+      }
+      await initLibraryFor(picked.folderPath);
+      TARGET_DIR = library.workspaceRoot;
+      const pdfs = await pdfStage.listPdfs();
+      return sendJson(res, 200, {
+        ok: true,
+        cancelled: false,
+        workspaceRoot: library.workspaceRoot,
+        domainProfile: library.domainProfile,
+        files: library.listFiles(),
+        pdfs,
+      });
+    }
+
+    if (req.method === 'GET' && pathname === '/api/folder/browse') {
+      const reqDir = url.searchParams.get('dir') || library.workspaceRoot || os.homedir();
+      const listing = await listBrowseDirectory(reqDir);
+      return sendJson(res, 200, listing);
     }
 
     if (req.method === 'POST' && pathname === '/api/folder') {
