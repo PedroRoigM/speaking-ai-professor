@@ -107,6 +107,14 @@
               </div>
             </div>
 
+            <label class="web-search-toggle" id="webSearchToggleCard" for="webSearchCheck" title="Permite al profesor buscar en internet para contrastar datos y ampliar explicaciones sin desviarse de tus apuntes (tardará unos segundos extra)">
+              <input id="webSearchCheck" type="checkbox" />
+              <span class="web-search-copy">
+                <span class="web-search-title">Buscar en internet</span>
+                <small class="web-search-hint" id="webSearchHint">Contrasta y amplía sin desviarse de tus apuntes · Tarda algo más</small>
+              </span>
+            </label>
+
             <div class="cta-row">
               <button id="startContinuousClassBtn" class="btn btn-primary cta-main">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -208,6 +216,20 @@
 
             <div id="fileList" class="file-list"></div>
           </section>
+
+          <hr class="rail-divider" id="webSourcesDivider" style="display:none;" />
+
+          <!-- Verified External Web References Section (Clickable Links + Reliability Tiers) -->
+          <section class="rail-section web-sources-section" id="webSourcesSection" style="display:none;" aria-label="Referencias web consultadas">
+            <div class="rail-head">
+              <h2 class="rail-label">Referencias web</h2>
+              <div class="web-sources-head-actions">
+                <span id="webSourcesCount" class="rail-count">0</span>
+                <button id="clearWebSourcesBtn" type="button" class="btn btn-xs btn-ghost" style="display:none;" title="Limpiar lista de referencias web">Limpiar</button>
+              </div>
+            </div>
+            <div id="webSourcesList" class="web-sources-list"></div>
+          </section>
         </div>
       </aside>
 
@@ -219,6 +241,14 @@
             <span class="stage-title" id="stageHeaderTitle">Mesa de estudio</span>
           </div>
           <div class="stage-tools">
+            <button id="webSourcesJumpBtn" type="button" class="btn btn-xs btn-subtle web-sources-jump-btn" style="display:none;" title="Ver enlaces y referencias web consultadas">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
+              <span id="webSourcesJumpLabel">0 fuentes web</span>
+            </button>
             <button id="replayDrawBtn" class="btn btn-xs btn-ghost" disabled title="Repetir animación del dibujo">Repetir</button>
             <button id="toggleInkBtn" class="btn btn-xs btn-subtle" title="Rodea cualquier zona para preguntar al profesor">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -434,7 +464,7 @@
         <div class="engine-grid" id="engineGrid">
           <button type="button" class="mode-btn engine-card active" data-engine="local">
             <span class="mode-title">Local gratis ($0)</span>
-            <small>Ollama en tu Mac · Privado y sin límites</small>
+            <small>Ollama en tu equipo · Privado y sin límites</small>
           </button>
           <button type="button" class="mode-btn engine-card" data-engine="gemini">
             <span class="mode-title">Gemini Cloud</span>
@@ -511,6 +541,16 @@
           <label for="topicInput">Enfoque de hoy (opcional)</label>
           <input id="topicInput" type="text" placeholder="ej. tema 3, repaso examen..." />
         </div>
+      </div>
+
+      <div class="settings-section">
+        <label class="checkbox-field web-search-settings-field" for="settingsWebSearchCheck">
+          <input id="settingsWebSearchCheck" type="checkbox" />
+          <span>
+            <strong>Buscar en internet para contrastar y ampliar</strong>
+            <small class="settings-field-note">El profesor consultará fuentes externas para verificar datos y dar mejores explicaciones sin desviarse de tus apuntes. Aviso: tardará unos segundos más en cada consulta o página.</small>
+          </span>
+        </label>
       </div>
 
       <div class="modal-footer-split">

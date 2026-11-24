@@ -1,9 +1,10 @@
 # Speaking AI Professor — Dual-Screen Live Classroom Stage
 
-> **A real-time speaking AI tutor and interactive classroom studio** that projects your PDF slides on the left, draws synchronized stroke-by-stroke vector schematics and formulas on a live chalkboard on the right, verifies calculations in Python, and listens to your voice interruptions — running **100% locally and free ($0)** on Apple Silicon (**Ollama + Kokoro-82M Neural TTS + mlx-whisper**) with a **1-click cloud switch** to **Google Gemini 3.8 Live & Gemini 4**.
+> **A real-time speaking AI tutor and interactive classroom studio** that projects your PDF slides on the left, draws synchronized stroke-by-stroke vector schematics and formulas on a live chalkboard on the right, verifies calculations in Python, optionally cross-checks facts online via a dedicated Web Research Agent without drifting from your notes, and listens to your voice interruptions — running **100% locally and free ($0)** on **macOS, Windows, and Linux** (**Ollama + Kokoro Neural TTS / Native OS Voice**) with a **1-click cloud switch** to **Google Gemini 3.8 Live & Gemini 4**.
 
+[![Cross-Platform](https://img.shields.io/badge/OS-macOS%20%7C%20Windows%20%7C%20Linux-334155)](#quick-start-2-minutes)
 [![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![Ollama Local $0](https://img.shields.io/badge/Local%20AI-Ollama%20%2B%20MLX%20GPU-0F172A)](https://ollama.com/)
+[![Ollama Local $0](https://img.shields.io/badge/Local%20AI-Ollama-0F172A)](https://ollama.com/)
 [![Gemini 3.8 Live](https://img.shields.io/badge/Cloud%20AI-Gemini%203.8%20Live%20%2F%204-2563EB?logo=google&logoColor=white)](https://ai.google.dev/)
 [![WCAG AA/AAA](https://img.shields.io/badge/UI-Cognitive%20Ergonomics%20WCAG%20AAA-0D8560)](#cognitive-ergonomic-study-ui)
 [![License: MIT](https://img.shields.io/badge/License-MIT-B45309.svg)](./LICENSE)
@@ -41,13 +42,13 @@ Most AI study tools dump walls of Markdown text into a chat box. Real engineerin
 - **Interactive Student Ink**: Toggle *Señalar / Dibujar*, circle any term or diagram on either the PDF or the chalkboard, and send the annotated frame straight to the vision model.
 - **Standalone Offline Export**: Export all whiteboards, solved problems, quizzes, and transcripts into a single self-contained HTML study sheet.
 
-### 2. Dual AI Engine — Local $0 (Apple Silicon GPU) or Cloud (Gemini Live)
+### 2. Dual AI Engine — Local $0 (macOS · Windows · Linux) or Cloud (Gemini Live)
 | Capability | 💻 Local Free ($0 · Default) | ☁️ Google Gemini Cloud (1-Click) |
 | :--- | :--- | :--- |
-| **Reasoning & Vision** | Ollama (`gemma4:12b`, `qwen3.5:9b`, `qwen3.5-27b`) on Metal GPU | Gemini 3.8 Live (`gemini-3.8-live`) & Gemini 4 Interactions API (`gemini-4-hydrogen` with auto failover to `gemini-3.5-flash-lite`) |
-| **Voice Output (TTS)** | **Kokoro-82M** neural TTS via `mlx-audio` (~210 ms/sentence, 24 kHz) + macOS native fallback | Native Gemini Live real-time bidirectional audio |
-| **Voice Input (STT)** | Instant Browser Speech **or** 100% offline **mlx-whisper** (`Space` PTT) | Full-duplex VAD with Anti-Echo Shield |
-| **Latency Engineering** | Static Prefix KV-Cache reuse + 5-page background lookahead + persistent disk cache | Real-time WebSocket streaming |
+| **Reasoning & Vision** | Ollama (`gemma4:12b`, `qwen3.5:9b`, `qwen3.5-27b`) on Metal / CUDA / CPU | Gemini 3.8 Live (`gemini-3.8-live`) & Gemini 4 Interactions API (`gemini-4-hydrogen` with auto failover to `gemini-3.5-flash-lite`) |
+| **Voice Output (TTS)** | **Kokoro-82M** neural TTS (`mlx-audio` on Apple Silicon · `kokoro-onnx` on Windows/Linux) + zero-install OS native fallback (**macOS `say`**, **Windows SAPI**, **Linux `espeak-ng`**) | Native Gemini Live real-time bidirectional audio |
+| **Voice Input (STT)** | Instant Browser Speech **or** 100% offline **Whisper** (`mlx-whisper` / `faster-whisper`, `Space` PTT) | Full-duplex VAD with Anti-Echo Shield |
+| **Verified Web Research** | Optional checkbox: dedicated 4-phase Web Research Agent (authority tiers, SEO-farm filter, SSRF guard, zero-drift audit, clickable **Referencias web** panel) | Same dedicated 4-phase Web Research Agent + clickable **Referencias web** panel |
 
 ### 3. Deterministic 12-Template Parametric Blueprint Engine
 Instead of letting an LLM hallucinate misaligned raw SVG coordinates or blank graphs, the chalkboard uses a deterministic parametric SVG engine (`public/blueprintTemplates.js`) featuring:
@@ -99,7 +100,7 @@ flowchart LR
 - **Poppler** (for rendering PDF slides):
   - macOS: `brew install poppler`
   - Ubuntu / Debian: `sudo apt install poppler-utils`
-  - Windows: [poppler-windows](https://github.com/oschwartz10612/poppler-windows/releases) (add `bin/` to `PATH`)
+  - Windows: `winget install oschwartz10612.Poppler` *(auto-installed by `.\install.ps1` and auto-detected even before PATH refresh)*
 - **Python 3.10+** (for math verification & Office document extraction)
 - **At least one AI backend**:
   - **Local Free ($0)**: [Ollama](https://ollama.com/) + `ollama pull gemma4:12b` *(or `qwen3.5:9b`)*
@@ -124,19 +125,37 @@ npm start
 > ./install.sh --all
 > ollama pull gemma4:12b
 > ```
-> Installs Node dependencies, Poppler, `espeak-ng`, Python `.venv` with **Kokoro-82M neural TTS** & **mlx-whisper**, applies Metal GPU tuning for Ollama, and registers the global `professor` CLI!
+> Installs Node dependencies, Poppler, `espeak-ng`, Python `.venv` with **Kokoro-82M MLX** & **mlx-whisper**, applies Metal GPU tuning, and links the global `professor` CLI!
+>
+> **Linux (`--with-voice`)**: automatically installs cross-platform **Kokoro ONNX + faster-whisper** (`requirements-voice-crossplatform.txt`), with `espeak-ng` as 0 MB native fallback.
 
-### Option B — Manual Install (macOS / Linux / Windows)
+### Option B — Automated Installer (Windows 10 / 11 PowerShell)
+
+```powershell
+git clone https://github.com/PedroRoigM/speaking-ai-professor.git
+cd speaking-ai-professor
+
+# Standard setup (Node deps + winget Poppler + native Windows SAPI voice — 0 MB extra):
+.\install.ps1
+
+# Optional: add Kokoro ONNX neural voice + faster-whisper + global `professor` command:
+.\install.ps1 -All
+
+# Launch with built-in sample notes:
+npm start
+```
+
+### Option C — Manual Install (macOS / Linux / Windows)
 
 ```bash
 git clone https://github.com/PedroRoigM/speaking-ai-professor.git
 cd speaking-ai-professor
 npm install
 
-# Optional: configure Gemini API key (or paste it inside the UI's "API Key" button)
+# Optional: configure Gemini API key (or paste it inside Settings -> API Key)
 cp .env.example .env
 
-# Run built-in 6-point health verification
+# Run built-in 9-point health & security verification
 npm run verify
 
 # Launch on http://localhost:3456

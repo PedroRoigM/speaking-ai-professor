@@ -67,6 +67,7 @@ const state = {
   },
   pendingClassStart: null,
   transcript: [],
+  webSources: [], // { url, title, domain, tier, context, confidence, addedAt }
   currentUserBubble: null,
   currentProfBubble: null,
   hasApiKey: false,
@@ -178,7 +179,170 @@ function applyRailState(side, collapsed) {
     audioBtn.classList.toggle('active', isHidden);
     audioBtn.setAttribute('aria-expanded', String(isHidden));
   });
+
+  // Web Research Checkbox Sync (Left Rail <-> Settings Modal + localStorage + Live WS update)
+  const webCheck = $('webSearchCheck');
+  const settingsWebCheck = $('settingsWebSearchCheck');
+  const webHint = $('webSearchHint');
+
+  const syncWebSearchUi = (enabled, { notifyServer = false } = {}) => {
+    const on = Boolean(enabled);
+    if (webCheck && webCheck.checked !== on) webCheck.checked = on;
+    if (settingsWebCheck && settingsWebCheck.checked !== on) settingsWebCheck.checked = on;
+    if (webHint) {
+      webHint.textContent = on
+        ? 'Activo · Buscará en internet para contrastar (tardará unos segundos extra)'
+        : 'Contrasta y amplía sin desviarse de tus apuntes · Tarda algo más';
+    }
+    try {
+      localStorage.setItem('prof-web-search', on ? 'true' : 'false');
+    } catch {}
+    if (notifyServer && state.connected && state.ws?.readyState === WebSocket.OPEN) {
+      state.ws.send(JSON.stringify({ type: 'update_config', config: { webSearch: on } }));
+    }
+    renderWebSourcesList();
+  };
+
+  let savedWebSearch = false;
+  try {
+    savedWebSearch = localStorage.getItem('prof-web-search') === 'true';
+  } catch {}
+  syncWebSearchUi(savedWebSearch, { notifyServer: false });
+
+  webCheck?.addEventListener('change', () => syncWebSearchUi(webCheck.checked, { notifyServer: true }));
+  settingsWebCheck?.addEventListener('change', () => syncWebSearchUi(settingsWebCheck.checked, { notifyServer: true }));
+
+  $('clearWebSourcesBtn')?.addEventListener('click', () => {
+    state.webSources = [];
+    renderWebSourcesList();
+  });
+
+  $('webSourcesJumpBtn')?.addEventListener('click', () => {
+    const shell = $('appShell') || document.querySelector('.app-shell');
+    if (shell?.classList.contains('left-collapsed')) {
+      applyRailState('left', false);
+    }
+    const sec = $('webSourcesSection');
+    sec?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 })();
+
+// ---------------- Dedicated Web References Section (Clickable Links + Reliability Tiers) ----------------
+function safeHttpUrl(raw) {
+  try {
+    const u = new URL(String(raw || '').trim());
+    if (u.protocol === 'https:' || u.protocol === 'http:') return u.toString();
+  } catch {}
+  return '';
+}
+
+function tierBadgeMeta(tier) {
+  const t = Number(tier) || 3;
+  if (t === 1) return { cls: 'tier-1', label: 'Académica' };
+  if (t === 2) return { cls: 'tier-2', label: 'Referencia' };
+  return { cls: 'tier-3', label: 'Web' };
+}
+
+function addWebSourcesEntry(entry) {
+  if (!entry || !Array.isArray(entry.sources) || !entry.sources.length) return;
+  const ctx = String(entry.context || '').trim();
+  const confidence = String(entry.confidence || 'medium');
+  const now = Date.now();
+  let changed = false;
+
+  for (const src of entry.sources) {
+    const cleanUrl = safeHttpUrl(src?.url);
+    if (!cleanUrl) continue;
+    const normKey = cleanUrl.replace(/#.*$/, '').replace(/\/$/, '');
+    const existingIdx = state.webSources.findIndex(
+      (x) => x.url.replace(/#.*$/, '').replace(/\/$/, '') === normKey,
+    );
+    const domain = String(src.domain || '').trim() || new URL(cleanUrl).hostname.replace(/^www\./, '');
+    const title = String(src.title || domain).trim();
+    const tier = Number(src.tier) || 3;
+
+    if (existingIdx !== -1) {
+      const prev = state.webSources[existingIdx];
+      prev.addedAt = now;
+      if (ctx && !prev.context.includes(ctx)) {
+        prev.context = prev.context ? `${ctx} · ${prev.context}`.slice(0, 140) : ctx;
+      }
+      if (tier < prev.tier) prev.tier = tier;
+      state.webSources.splice(existingIdx, 1);
+      state.webSources.unshift(prev);
+    } else {
+      state.webSources.unshift({
+        url: cleanUrl,
+        title,
+        domain,
+        tier,
+        context: ctx,
+        confidence,
+        addedAt: now,
+      });
+    }
+    changed = true;
+  }
+
+  if (state.webSources.length > 40) state.webSources.length = 40;
+  if (changed) renderWebSourcesList();
+}
+
+function renderWebSourcesList() {
+  const sec = $('webSourcesSection');
+  const div = $('webSourcesDivider');
+  const list = $('webSourcesList');
+  const countEl = $('webSourcesCount');
+  const clearBtn = $('clearWebSourcesBtn');
+  const jumpBtn = $('webSourcesJumpBtn');
+  const jumpLabel = $('webSourcesJumpLabel');
+  if (!sec || !list) return;
+
+  const webEnabled = Boolean($('webSearchCheck')?.checked);
+  const count = state.webSources.length;
+  const shouldShow = webEnabled || count > 0;
+
+  sec.style.display = shouldShow ? 'block' : 'none';
+  if (div) div.style.display = shouldShow ? 'block' : 'none';
+  if (countEl) countEl.textContent = String(count);
+  if (clearBtn) clearBtn.style.display = count > 0 ? 'inline-flex' : 'none';
+  if (jumpBtn) jumpBtn.style.display = count > 0 ? 'inline-flex' : 'none';
+  if (jumpLabel) jumpLabel.textContent = `${count} ${count === 1 ? 'fuente web' : 'fuentes web'}`;
+
+  list.innerHTML = '';
+  if (count === 0) {
+    list.innerHTML =
+      '<div class="web-source-empty">Las fuentes académicas y de referencia contrastadas aparecerán aquí con enlace directo.</div>';
+    return;
+  }
+
+  for (const item of state.webSources) {
+    const a = document.createElement('a');
+    a.className = 'web-source-card';
+    a.href = item.url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.title = `Abrir fuente: ${item.url}`;
+
+    const badge = tierBadgeMeta(item.tier);
+    a.innerHTML = `
+      <div class="web-source-top">
+        <span class="web-source-domain">${escapeHtml(item.domain)}</span>
+        <span class="web-tier-badge ${badge.cls}">${badge.label}</span>
+      </div>
+      <div class="web-source-title">
+        <span>${escapeHtml(item.title)}</span>
+        <svg class="web-source-ext" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+          <polyline points="15 3 21 3 21 9"/>
+          <line x1="10" y1="14" x2="21" y2="3"/>
+        </svg>
+      </div>
+      ${item.context ? `<div class="web-source-ctx">${escapeHtml(item.context)}</div>` : ''}
+    `;
+    list.appendChild(a);
+  }
+}
 
 // ---------------- Utilities ----------------
 function setStatus(visualState, text) {
@@ -558,6 +722,8 @@ function applyStageEvent(evt, { pacingMs = 0 } = {}) {
     pushScene({ kind: 'quiz', title: evt.data.question || 'Quick Check', data: evt.data });
   } else if (evt.type === 'stage_math') {
     showMathBanner(evt.data);
+  } else if (evt.type === 'web_sources') {
+    addWebSourcesEntry(evt.entry);
   }
 }
 
@@ -1977,6 +2143,7 @@ async function connectSession() {
           localModel: $('localModelSelect').value,
           localVoice: $('localVoiceSelect').value,
           localThink: $('localThinkCheck').checked,
+          webSearch: Boolean($('webSearchCheck')?.checked),
           model: $('modelSelect').value,
           geminiClassModel: $('geminiClassModelSelect')?.value || 'gemini-4-hydrogen',
           voice: $('voiceSelect').value,
@@ -2088,6 +2255,10 @@ async function connectSession() {
       appendTranscript('user', msg.text, true);
     } else if (msg.type === 'output_transcript') {
       appendTranscript('professor', msg.text, true);
+    } else if (msg.type === 'status') {
+      setStatus(msg.state || 'thinking', msg.text || 'Procesando...');
+    } else if (msg.type === 'web_sources') {
+      addWebSourcesEntry(msg.entry);
     } else if (msg.type === 'tool_status') {
       appendTranscript('system', msg.label);
     } else if (msg.type === 'error') {
@@ -2806,8 +2977,10 @@ let browseParentPath = null;
 function applySwitchedFolderData(data) {
   state.pdfView = null;
   state.scenes = [];
+  state.webSources = [];
   state.activeSceneIdx = -1;
   state.activeLabIframe = null;
+  renderWebSourcesList();
   populatePdfSelector(data.pdfs || []);
   applyDomainProfile(data.domainProfile);
   renderFileList(data.files || []);
@@ -3053,6 +3226,15 @@ $('exportBtn').addEventListener('click', () => {
     .map((t) => `<div class="t-row ${t.role}"><strong>${t.role === 'user' ? 'Student' : 'Professor'} (${t.ts}):</strong> ${escapeHtml(t.text)}</div>`)
     .join('\n');
 
+  const webRefsHtml = state.webSources.length
+    ? `<h2>Referencias web contrastadas</h2>\n<ul class="card" style="padding-left:34px;">${state.webSources
+        .map(
+          (s) =>
+            `<li style="margin:6px 0;"><a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer" style="color:#1d4ed8;font-weight:550;">${escapeHtml(s.title)}</a> <span style="color:#64748b;font-size:12px;">(${escapeHtml(s.domain)}${s.context ? ` · ${escapeHtml(s.context)}` : ''})</span></li>`,
+        )
+        .join('\n')}</ul>`
+    : '';
+
   const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -3098,6 +3280,7 @@ $('exportBtn').addEventListener('click', () => {
   <div class="meta">Apuntes exportados desde Profesor IA · ${new Date().toLocaleString()}</div>
   <h2>Pizarras, problemas resueltos y laboratorios</h2>
   ${scenesHtml}
+  ${webRefsHtml}
   <h2>Transcripción de la clase</h2>
   ${transcriptHtml || '<p>No se registró transcripción en esta sesión.</p>'}
 </body>
@@ -3293,8 +3476,10 @@ async function init() {
     localVoiceSel.appendChild(opt);
   }
   if (!state.voiceCapabilities.kokoro) {
-    localVoiceSel.value = 'macos:Mónica';
-    $('voiceCapBadge').textContent = '· macOS Nativo';
+    const nativeId = cfg.defaultNativeVoice || (cfg.platform === 'win32' ? 'windows:es' : cfg.platform === 'linux' ? 'linux:es' : 'macos:Mónica');
+    localVoiceSel.value = nativeId;
+    const nativeLabel = cfg.platform === 'win32' ? '· Windows SAPI' : cfg.platform === 'linux' ? '· Linux Nativo' : '· macOS Nativo';
+    $('voiceCapBadge').textContent = nativeLabel;
   } else {
     localVoiceSel.value = 'kokoro:em_alex';
     $('voiceCapBadge').textContent = '· Kokoro Neural READY';

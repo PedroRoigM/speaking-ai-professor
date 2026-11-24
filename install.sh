@@ -62,21 +62,24 @@ else
   fi
 fi
 
-# 4. Optional Apple Silicon Neural Voice (.venv: Kokoro-82M + mlx-whisper)
+# 4. Optional Local Neural Voice (.venv)
 if [ "$WITH_VOICE" = true ]; then
-  if [ "$(uname -s)" != "Darwin" ] || [ "$(uname -m)" != "arm64" ]; then
-    echo "⚠️  --with-voice uses MLX for Apple Silicon Macs (arm64). Skipping local MLX voice setup on this platform."
-    echo "   Tip: You can still use macOS/Browser voices or Gemini Live Cloud out of the box."
-  else
+  if [ "$(uname -s)" = "Darwin" ] && [ "$(uname -m)" = "arm64" ]; then
     if command -v brew >/dev/null 2>&1 && ! brew list espeak-ng >/dev/null 2>&1; then
       echo "🔊 Installing espeak-ng via Homebrew (for Spanish/English phonemization)..."
       brew install espeak-ng
     fi
-    echo "🐍 Setting up Python .venv for Kokoro-82M neural TTS + mlx-whisper STT..."
+    echo "🐍 Setting up Python .venv for Apple Silicon Kokoro-82M MLX + mlx-whisper..."
     python3 -m venv "$ROOT_DIR/.venv"
     "$ROOT_DIR/.venv/bin/python" -m pip install --upgrade pip
     "$ROOT_DIR/.venv/bin/python" -m pip install -r "$ROOT_DIR/requirements-voice.txt"
-    echo "✅ Local neural voice ready!"
+    echo "✅ Apple Silicon neural voice ready!"
+  else
+    echo "🐍 Setting up cross-platform Python .venv (Kokoro ONNX + faster-whisper)..."
+    python3 -m venv "$ROOT_DIR/.venv"
+    "$ROOT_DIR/.venv/bin/python" -m pip install --upgrade pip
+    "$ROOT_DIR/.venv/bin/python" -m pip install -r "$ROOT_DIR/requirements-voice-crossplatform.txt"
+    echo "✅ Cross-platform local neural voice ready!"
   fi
 fi
 

@@ -3,7 +3,6 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import {
@@ -18,7 +17,10 @@ import { PdfStageService } from './lib/pdfStage.mjs';
 import { ClassDirector } from './lib/classDirector.mjs';
 import { LookaheadClassEngine } from './lib/classTimeline.mjs';
 import { verifyMathPython } from './lib/mathVerifier.mjs';
-import { LocalVoiceEngine, LOCAL_VOICES } from './lib/localVoice.mjs';
+import { searchWeb, fetchWebPage } from './lib/webSearch.mjs';
+import { WebResearchAgent } from './lib/webResearchAgent.mjs';
+import { LocalVoiceEngine, getLocalVoicesForPlatform, getDefaultNativeVoiceId } from './lib/localVoice.mjs';
+import { openBrowserUrl, getPlatformSummary } from './lib/platformTools.mjs';
 import { pickNativeFolderDialog, listBrowseDirectory } from './lib/folderPicker.mjs';
 import {
   SECURITY_HEADERS,
@@ -254,10 +256,12 @@ const server = http.createServer(async (req, res) => {
       const [ollama, pdfs] = await Promise.all([getOllamaStatus(), pdfStage.listPdfs()]);
       return sendJson(res, 200, {
         hasApiKey: Boolean(runtimeApiKey),
+        platform: process.platform,
+        defaultNativeVoice: getDefaultNativeVoiceId(),
         models: AVAILABLE_MODELS,
         classModels: AVAILABLE_CLASS_MODELS,
         voices: AVAILABLE_VOICES,
-        localVoices: LOCAL_VOICES,
+        localVoices: getLocalVoicesForPlatform(),
         recommendedLocalModels: RECOMMENDED_LOCAL_MODELS,
         ollama,
         voiceCapabilities: voiceEngine.capabilities,
@@ -475,20 +479,31 @@ wss.on('connection', (clientWs) => {
     }
   };
 
+  const getSessionRuntimeConfig = () => ({
+    engine: activeEngine,
+    localModel: activeConfig?.localModel || 'qwen3.5:9b',
+    geminiClassModel: normalizeGeminiClassModelId(activeConfig?.geminiClassModel),
+    localVoice: activeConfig?.localVoice || 'kokoro:em_alex',
+    language: activeConfig?.language || 'es',
+    webSearch: Boolean(activeConfig?.webSearch),
+    folderName: library.domainProfile?.folderName || '',
+    apiKey: runtimeApiKey,
+  });
+
+  // Dedicated Web Research & Fact-Checking Subagent (authority-ranked, triangulated, zero-drift, disk-cached)
+  const webResearchAgent = new WebResearchAgent({
+    cacheDir: activeCacheDir,
+    getRuntimeConfig: getSessionRuntimeConfig,
+  });
+
   // Lookahead Synchronized Classroom Engine (Adaptive Metal GPU Scheduler + Persistent Disk Lesson Cache!)
   const lookaheadClass = new LookaheadClassEngine({
     pdfStage,
     voiceEngine,
     sendClient,
     cacheDir: activeCacheDir,
-    getRuntimeConfig: () => ({
-      engine: activeEngine,
-      localModel: activeConfig?.localModel || 'qwen3.5:9b',
-      geminiClassModel: normalizeGeminiClassModelId(activeConfig?.geminiClassModel),
-      localVoice: activeConfig?.localVoice || 'kokoro:em_alex',
-      language: activeConfig?.language || 'es',
-      apiKey: runtimeApiKey,
-    }),
+    webResearchAgent,
+    getRuntimeConfig: getSessionRuntimeConfig,
   });
 
   // Helper to detect instant resume / back-page voice commands during an active class
@@ -799,6 +814,104 @@ wss.on('connection', (clientWs) => {
         return result;
       }
 
+      if (name === 'research_web_verified') {
+        if (!activeConfig?.webSearch) {
+          return {
+            ok: false,
+            error: 'La búsqueda en internet está desactivada por el alumno. Responde usando únicamente sus apuntes.',
+          };
+        }
+        const topic = String(args.topic || '').trim();
+        const notesContext = [args.notes_intent, args.notes_excerpt].filter(Boolean).join('\n');
+        sendClient({ type: 'status', state: 'thinking', text: 'Contrastando en internet...' });
+        const brief = await webResearchAgent.research({
+          topic,
+          notesContext,
+          folderName: library.domainProfile?.folderName || '',
+          language: activeConfig?.language === 'en' ? 'en' : 'es',
+          depth: 'standard',
+          onProgress: (label) => {
+            sendClient({ type: 'status', state: 'thinking', text: label.replace(/^[^\p{L}\p{N}]+/u, '').slice(0, 48) });
+          },
+        });
+        if (brief.ok && brief.sources?.length) {
+          sendClient({
+            type: 'web_sources',
+            entry: {
+              context: String(brief.notes_intent || topic || 'Consulta contrastada').slice(0, 120),
+              status: brief.status || 'verified',
+              confidence: brief.confidence || 'medium',
+              sources: brief.sources,
+            },
+          });
+        }
+        return brief;
+      }
+
+      if (name === 'search_web') {
+        if (!activeConfig?.webSearch) {
+          return {
+            ok: false,
+            error: 'La búsqueda en internet está desactivada por el alumno. Responde usando únicamente sus apuntes.',
+          };
+        }
+        const q = String(args.query || '').trim();
+        sendClient({ type: 'status', state: 'thinking', text: 'Buscando fuentes web...' });
+        const result = await searchWeb(q, {
+          maxResults: Number(args.max_results) || 4,
+          lang: activeConfig?.language === 'en' ? 'en' : 'es',
+          includeAcademic: true,
+        });
+        if (result.ok && result.results?.length) {
+          sendClient({
+            type: 'web_sources',
+            entry: {
+              context: q.slice(0, 120),
+              status: result.distinctDomains >= 2 ? 'verified' : 'partial',
+              confidence: result.distinctDomains >= 2 ? 'medium' : 'low',
+              sources: result.results.map((r) => ({
+                title: r.title,
+                domain: r.domain,
+                url: r.url,
+                tier: r.tier || 3,
+              })),
+            },
+          });
+        }
+        return result;
+      }
+
+      if (name === 'fetch_web_page') {
+        if (!activeConfig?.webSearch) {
+          return {
+            ok: false,
+            error: 'La búsqueda en internet está desactivada por el alumno.',
+          };
+        }
+        const targetUrl = String(args.url || '').trim();
+        sendClient({ type: 'status', state: 'thinking', text: 'Leyendo fuente web...' });
+        const result = await fetchWebPage(targetUrl, { maxChars: 3800 });
+        if (result.ok && result.url) {
+          sendClient({
+            type: 'web_sources',
+            entry: {
+              context: result.title || result.domain || 'Fuente leída',
+              status: 'verified',
+              confidence: result.tier === 1 ? 'high' : 'medium',
+              sources: [
+                {
+                  title: result.title || result.domain,
+                  domain: result.domain,
+                  url: result.url,
+                  tier: result.tier || 3,
+                },
+              ],
+            },
+          });
+        }
+        return result;
+      }
+
       return { ok: false, error: `Unknown tool: ${name}` };
     } catch (err) {
       return { ok: false, error: err.message };
@@ -865,6 +978,7 @@ wss.on('connection', (clientWs) => {
     cancelledToolIds.clear();
     insideLeakedSvg = false;
     svgCaptureBuffer = '';
+    const webSearchEnabled = Boolean(sessionOpts.webSearch);
     const catalogSummary = await library.getActiveCatalogSummary();
     const systemText = buildSystemInstruction({
       mode: sessionOpts.mode || 'folder_expert',
@@ -872,6 +986,7 @@ wss.on('connection', (clientWs) => {
       catalogSummary,
       customContext: sessionOpts.topic ? `Student's requested focus: ${sessionOpts.topic}` : '',
       classModeActive: sessionOpts.mode === 'continuous_class',
+      webSearchEnabled,
     });
 
     const config = {
@@ -886,7 +1001,7 @@ wss.on('connection', (clientWs) => {
       systemInstruction: {
         parts: [{ text: systemText }],
       },
-      tools: getProfessorToolDeclarations(),
+      tools: getProfessorToolDeclarations({ webSearchEnabled }),
       realtimeInputConfig: {
         automaticActivityDetection: {
           startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
@@ -1101,6 +1216,25 @@ wss.on('connection', (clientWs) => {
         localSession = null;
       }
       sendClient({ type: 'session_closed', reason: 'Stopped by user' });
+      return;
+    }
+
+    if (msg.type === 'update_config' && msg.config && typeof msg.config === 'object') {
+      if (!activeConfig) activeConfig = {};
+      if (typeof msg.config.webSearch === 'boolean') {
+        activeConfig.webSearch = msg.config.webSearch;
+        if (localSession) {
+          localSession.setWebSearchEnabled(activeConfig.webSearch);
+        }
+        sendClient({
+          type: 'tool_status',
+          label: activeConfig.webSearch
+            ? activeEngine === 'gemini'
+              ? '🌐 Búsqueda web activada (se aplicará en las siguientes páginas de clase; reconecta la voz Gemini para usar las tools web en el chat en directo).'
+              : '🌐 Búsqueda en internet activada: el profesor contrastará y ampliará sin desviarse de tus apuntes (puede tardar unos segundos más).'
+            : 'Búsqueda en internet desactivada · Trabajando solo con tus apuntes locales.',
+        });
+      }
       return;
     }
 
@@ -1324,21 +1458,34 @@ function listenWithFallback(startPort, maxTries = 15) {
     server.listen(p, '127.0.0.1', () => {
       const url = `http://localhost:${p}`;
       const dp = library.domainProfile;
-      const memGb = Math.round(os.totalmem() / 1024 ** 3);
-      const cpuBrand = os.cpus()?.[0]?.model || 'Apple Silicon';
+      const plat = getPlatformSummary();
       const loadedGpuStr = initialGpuPs.length
         ? initialGpuPs.map((m) => `${m.name} (${m.gpuPct}% GPU · ${m.vramGb} GB)`).join(', ')
-        : 'MLX Metal GPU on demand (100% GPU)';
+        : plat.isAppleSilicon
+          ? 'MLX Metal GPU on demand'
+          : 'Auto GPU/CPU on demand';
+      const nativeTtsLabel =
+        plat.platform === 'win32'
+          ? 'fallback Windows SAPI'
+          : plat.platform === 'linux'
+            ? voiceCaps.linuxEspeak
+              ? 'fallback espeak-ng'
+              : 'install espeak-ng or Kokoro'
+            : 'fallback macOS say';
+      const kokoroLabel = voiceCaps.kokoro
+        ? `READY (${voiceCaps.kokoroBackend || 'neural'})`
+        : nativeTtsLabel;
+      const whisperLabel = voiceCaps.whisper ? `READY (${voiceCaps.whisperBackend || 'local'})` : 'browser STT';
       console.log(`\n🎓  Speaking AI Professor — Live Classroom Stage (PDF + Precision CAD Board + Local $0)`);
       console.log(`🌐  URL:      ${url}`);
       console.log(`📂  Folder:   ${dp?.workspaceRoot || TARGET_DIR}`);
       console.log(`🧠  Expert:   ${dp?.folderName || path.basename(TARGET_DIR)} (${dp?.activeFiles || 0}/${dp?.totalFiles || 0} study files indexed)`);
-      console.log(`⚡  GPU/UMA:  ${cpuBrand} · ${memGb} GB UMA · ${loadedGpuStr} · Disk Lesson Cache ON`);
+      console.log(`⚡  System:   ${plat.osLabel} (${plat.arch}) · ${plat.cpuBrand} · ${plat.memGb} GB RAM · ${loadedGpuStr} · Disk Cache ON`);
       console.log(`💻  Local:    Ollama ${initialOllama.running ? `running (${initialOllama.models.map((m) => m.name).join(', ') || 'no models'})` : 'offline'}`);
-      console.log(`🔊  TTS/STT:  Kokoro=${voiceCaps.kokoro ? 'READY (Metal GPU · 256MB cache cap)' : 'fallback macOS'} · mlx-whisper=${voiceCaps.whisper ? 'READY' : 'browser STT'}`);
+      console.log(`🔊  TTS/STT:  Kokoro=${kokoroLabel} · Whisper=${whisperLabel}`);
       console.log(`☁️   Cloud:    GEMINI_API_KEY ${runtimeApiKey ? 'configured' : 'optional (not needed in Local mode)'}\n`);
       if (cli.open) {
-        execFile('open', [url], () => {});
+        openBrowserUrl(url);
       }
     });
   };

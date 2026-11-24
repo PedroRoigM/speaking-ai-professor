@@ -1,0 +1,10 @@
+# Optional Cross-Platform Local Neural Voice (Windows 10/11, Linux, Intel Mac)
+# Install via:
+#   Windows: .\install.ps1 -WithVoice
+#   Linux:   ./install.sh --with-voice
+# Note: Apple Silicon Macs use requirements-voice.txt (MLX Metal GPU acceleration).
+
+kokoro-onnx>=0.4.0
+faster-whisper>=1.0.3
+numpy>=1.26.0
+soundfile>=0.12.1

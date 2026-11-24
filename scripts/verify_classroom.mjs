@@ -15,7 +15,20 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const APP_DIR = path.resolve(__dirname, '..');
 
 const { verifyMathPython } = await import(path.join(APP_DIR, 'lib', 'mathVerifier.mjs'));
-const { getOllamaStatus, getOllamaRunningGpuInfo } = await import(path.join(APP_DIR, 'lib', 'localProfessor.mjs'));
+const { getOllamaStatus, getOllamaRunningGpuInfo, getOllamaTools } = await import(
+  path.join(APP_DIR, 'lib', 'localProfessor.mjs')
+);
+const { getProfessorToolDeclarations } = await import(path.join(APP_DIR, 'lib', 'professorConfig.mjs'));
+const { validatePublicHttpUrl, searchWeb, buildSlideSearchQuery, scoreSourceAuthority, isBlockedLowTrustDomain } = await import(
+  path.join(APP_DIR, 'lib', 'webSearch.mjs')
+);
+const { WebResearchAgent, formatVerifiedBriefForPrompt } = await import(
+  path.join(APP_DIR, 'lib', 'webResearchAgent.mjs')
+);
+const { execPython, execPoppler, getPlatformSummary } = await import(path.join(APP_DIR, 'lib', 'platformTools.mjs'));
+const { getLocalVoicesForPlatform, buildWavFromPcm16, extractWavPcmAndRate } = await import(
+  path.join(APP_DIR, 'lib', 'localVoice.mjs')
+);
 const { isAllowedLocalHost, isAllowedLocalOrigin, resolveStaticPath } = await import(
   path.join(APP_DIR, 'lib', 'httpSecurity.mjs')
 );
@@ -36,39 +49,43 @@ const check = async (name, fn) => {
 
 console.log('\n🔎 Speaking AI Professor — Verificación completa del aula\n');
 
-await check('Sintaxis JS/MJS + Python', () => {
+await check('Sintaxis JS/MJS + Python', async () => {
   const modules = [
     'server.mjs',
     'bin/professor.mjs',
+    'lib/platformTools.mjs',
     'lib/httpSecurity.mjs',
     'lib/folderPicker.mjs',
     'lib/studyLibrary.mjs',
     'lib/classTimeline.mjs',
     'lib/pdfStage.mjs',
+    'lib/localVoice.mjs',
     'lib/mathVerifier.mjs',
+    'lib/webSearch.mjs',
+    'lib/webResearchAgent.mjs',
     'lib/professorConfig.mjs',
     'public/app.js',
     'public/stageRenderer.js',
     'public/blueprintTemplates.js',
   ];
   for (const rel of modules) {
-    execFileSync('node', ['--check', path.join(APP_DIR, rel)], { stdio: 'pipe' });
+    execFileSync(process.execPath, ['--check', path.join(APP_DIR, rel)], { stdio: 'pipe' });
   }
-  execFileSync('python3', ['-m', 'py_compile', path.join(APP_DIR, 'lib', 'voice_worker.py')], { stdio: 'pipe' });
+  await execPython(['-m', 'py_compile', path.join(APP_DIR, 'lib', 'voice_worker.py')]);
   return `${modules.length + 1} módulos sin errores de sintaxis`;
 });
 
-await check('Ollama Local + Apple Silicon Metal GPU', async () => {
+await check('Ollama Local + GPU/CPU', async () => {
   const st = await getOllamaStatus();
   assert.ok(st.running, 'Ollama no responde en 127.0.0.1:11434');
   const gpu = await getOllamaRunningGpuInfo();
-  const gpuStr = gpu.length ? gpu.map((m) => `${m.name} (${m.gpuPct}% GPU)`).join(', ') : 'en espera (se carga en GPU al iniciar)';
+  const gpuStr = gpu.length ? gpu.map((m) => `${m.name} (${m.gpuPct}% GPU)`).join(', ') : 'en espera (se carga al iniciar)';
   return `${st.models.length} modelos (${gpuStr})`;
 });
 
-await check('Poppler PDF (pdftoppm / pdftotext / pdfinfo)', () => {
-  execFileSync('pdftotext', ['-v'], { stdio: 'pipe' });
-  execFileSync('pdftoppm', ['-v'], { stdio: 'pipe' });
+await check('Poppler PDF (pdftoppm / pdftotext / pdfinfo)', async () => {
+  await execPoppler('pdftotext', ['-v']);
+  await execPoppler('pdftoppm', ['-v']);
   return 'instalado y operativo';
 });
 
@@ -162,6 +179,121 @@ await check('Seguridad: Sandbox Python AST, CSRF/CSWSH, Path Traversal y Parser 
   assert.strictEqual(evalSafeExpr('constructor.constructor("return 1")()'), null);
 
   return '5 ataques bloqueados + parser matemático sin eval/Function verificado';
+});
+
+await check('Agente Investigador Web: Gating, Ranking Fiable, Bloqueo SEO/SSRF y Repetibilidad', async () => {
+  // 1. Tools MUST be hidden when webSearchEnabled=false and exposed when webSearchEnabled=true
+  const offGemini = getProfessorToolDeclarations({ webSearchEnabled: false })[0].functionDeclarations.map((f) => f.name);
+  const onGemini = getProfessorToolDeclarations({ webSearchEnabled: true })[0].functionDeclarations.map((f) => f.name);
+  assert.ok(
+    !offGemini.includes('research_web_verified') && !offGemini.includes('search_web') && !offGemini.includes('fetch_web_page'),
+    'Gemini expuso tools web estando desactivadas',
+  );
+  assert.ok(
+    onGemini.includes('research_web_verified') && onGemini.includes('search_web') && onGemini.includes('fetch_web_page'),
+    'Gemini no expuso tools web al activarlas',
+  );
+
+  const offOllama = getOllamaTools({ classMode: true, webSearchEnabled: false }).map((t) => t.function.name);
+  const onOllama = getOllamaTools({ classMode: true, webSearchEnabled: true }).map((t) => t.function.name);
+  assert.ok(
+    !offOllama.includes('research_web_verified') && !offOllama.includes('search_web') && !offOllama.includes('fetch_web_page'),
+    'Ollama expuso tools web estando desactivadas',
+  );
+  assert.ok(
+    onOllama.includes('research_web_verified') && onOllama.includes('search_web') && onOllama.includes('fetch_web_page'),
+    'Ollama no expuso tools web al activarlas',
+  );
+
+  // 2. Source authority ranking & SEO farm / homework mill filtering
+  for (const spam of ['https://www.lifeder.com/teorema-steiner/', 'https://brainly.lat/tarea/123', 'https://www.rincondelvago.com/fisica', 'https://www.reddit.com/r/physics']) {
+    assert.strictEqual(isBlockedLowTrustDomain(spam), true, `No bloqueó dominio basura: ${spam}`);
+    assert.strictEqual(scoreSourceAuthority(spam).tier, 0, `Tier distinto de 0 en dominio basura: ${spam}`);
+  }
+  assert.strictEqual(scoreSourceAuthority('https://ocw.mit.edu/courses/physics').tier, 1);
+  assert.strictEqual(scoreSourceAuthority('https://arxiv.org/abs/2101.00001').tier, 1);
+  assert.strictEqual(scoreSourceAuthority('https://es.wikipedia.org/wiki/Teorema_de_Steiner').tier, 2);
+
+  // 3. Strict SSRF protection (loopback, private IPs, metadata, file://)
+  for (const badUrl of [
+    'http://127.0.0.1:3456/api/health',
+    'http://localhost:11434/api/tags',
+    'http://169.254.169.254/latest/meta-data/',
+    'http://10.0.0.1/internal',
+    'http://192.168.1.1/',
+    'http://[::1]/',
+    'file:///etc/passwd',
+  ]) {
+    const checkUrl = await validatePublicHttpUrl(badUrl, { resolveDns: false });
+    assert.strictEqual(checkUrl.ok, false, `SSRF Guard NO bloqueó URL peligrosa: ${badUrl}`);
+  }
+  const goodUrl = await validatePublicHttpUrl('https://es.wikipedia.org/wiki/Teorema_de_Steiner', { resolveDns: false });
+  assert.strictEqual(goodUrl.ok, true, 'SSRF Guard rechazó una URL pública legítima');
+
+  // 4. Slide query builder + live authority-filtered search (ZERO blocked domains!)
+  const q = buildSlideSearchQuery(
+    { layout: { lines: [{ text: 'Página 3' }, { text: 'Sensibilidad de carga del neumático' }] }, text: '' },
+    'Dinámica de Vehículos',
+  );
+  assert.ok(q.toLowerCase().includes('neumático'), `Query de diapositiva inesperada: ${q}`);
+
+  const liveRes = await searchWeb('Teorema de Steiner momento de inercia', {
+    maxResults: 4,
+    lang: 'es',
+    includeAcademic: true,
+    timeoutMs: 7500,
+  });
+  assert.ok(liveRes.ok && liveRes.results.length >= 2, `searchWeb falló: ${JSON.stringify(liveRes)}`);
+  for (const r of liveRes.results) {
+    assert.strictEqual(isBlockedLowTrustDomain(r.url), false, `Se coló dominio bloqueado: ${r.url}`);
+  }
+
+  // 5. Full WebResearchAgent deterministic repeatability test (quick mode)
+  const osMod = await import('node:os');
+  const tmpCache = path.join(osMod.default.tmpdir(), `sap-webresearch-test-${Date.now()}`);
+  const agent = new WebResearchAgent({
+    cacheDir: tmpCache,
+    getRuntimeConfig: () => ({ engine: 'local', localModel: 'gemma4:12b', language: 'es' }),
+  });
+  const b1 = await agent.research({
+    topic: 'Teorema de Steiner momento de inercia ejes paralelos',
+    notesContext: 'I = I_CG + m * d^2 donde d es la distancia perpendicular entre ejes paralelos.',
+    folderName: 'Dinámica de Vehículos',
+    language: 'es',
+    depth: 'quick',
+  });
+  assert.ok(b1.ok && b1.sources.length >= 1, `WebResearchAgent falló: ${JSON.stringify(b1)}`);
+  const formatted = formatVerifiedBriefForPrompt(b1);
+  assert.ok(formatted.includes('BRIEFING VERIFICADO'), 'Briefing mal formateado');
+  const b2 = await agent.research({
+    topic: 'Teorema de Steiner momento de inercia ejes paralelos',
+    notesContext: 'I = I_CG + m * d^2 donde d es la distancia perpendicular entre ejes paralelos.',
+    folderName: 'Dinámica de Vehículos',
+    language: 'es',
+    depth: 'quick',
+  });
+  assert.strictEqual(b2.cached, true, 'La 2ª llamada idéntica no usó caché determinista');
+  const topDoms = b1.sources.slice(0, 3).map((s) => `${s.domain}(T${s.tier})`).join(', ');
+  return `gating + SEO/SSRF bloqueados + agente 4-fases (${b1.status}/${b1.confidence} · ${topDoms}) + caché repetible OK`;
+});
+
+await check('Multiplataforma (macOS / Windows / Linux): Voces Nativas y WAV Parser', () => {
+  const winVoices = getLocalVoicesForPlatform('win32');
+  const linVoices = getLocalVoicesForPlatform('linux');
+  const macVoices = getLocalVoicesForPlatform('darwin');
+  assert.ok(winVoices.some((v) => v.id === 'windows:es'), 'Falta voz Windows SAPI ES');
+  assert.ok(linVoices.some((v) => v.id === 'linux:es'), 'Falta voz Linux espeak-ng ES');
+  assert.ok(macVoices.some((v) => v.id === 'macos:Mónica'), 'Falta voz macOS ES');
+
+  // Verify WAV fmt sampleRate extraction (e.g. 22050 Hz from Windows SAPI)
+  const dummyPcm = Buffer.alloc(440);
+  const wav22k = buildWavFromPcm16(dummyPcm, 22050);
+  const parsed = extractWavPcmAndRate(wav22k, 24000);
+  assert.strictEqual(parsed.sampleRate, 22050, `SampleRate WAV incorrecto: ${parsed.sampleRate}`);
+  assert.strictEqual(parsed.pcm.length, 440, 'Longitud PCM incorrecta');
+
+  const plat = getPlatformSummary();
+  return `${plat.osLabel} (${plat.arch}) · catálogos Win/Linux/Mac + WAV parser OK`;
 });
 
 console.log(failed === 0 ? '\n🎉 TODAS LAS VERIFICACIONES PASARON AL 100%\n' : `\n⚠️ ${failed} comprobaciones fallaron\n`);
