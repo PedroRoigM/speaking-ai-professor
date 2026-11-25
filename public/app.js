@@ -2281,7 +2281,7 @@ async function connectSession({ requestMic = false } = {}) {
           localThink: $('localThinkCheck').checked,
           webSearch: Boolean($('webSearchCheck')?.checked),
           model: $('modelSelect').value,
-          geminiClassModel: $('geminiClassModelSelect')?.value || 'gemini-4-hydrogen',
+          geminiClassModel: $('geminiClassModelSelect')?.value || 'gemini-3.5-flash',
           voice: $('voiceSelect').value,
           language: $('langSelect').value,
           mode: state.mode,
@@ -3469,19 +3469,30 @@ function updateEngineSummaryBadge() {
     const modelName = $('localModelSelect')?.value || 'Ollama';
     badge.textContent = state.ollama.running ? `Local · ${modelName}` : 'Local · Offline';
   } else {
-    const clsModel = $('geminiClassModelSelect')?.value || $('modelSelect')?.value || 'Gemini';
-    const shortName = clsModel.replace(/^gemini-/, '').replace(/-/g, ' ');
-    badge.textContent = `Cloud · ${shortName}`;
+    const liveId = $('modelSelect')?.value || 'gemini-3.8-live';
+    const clsId = $('geminiClassModelSelect')?.value || 'gemini-3.5-flash';
+    const liveShort = liveId.includes('extended-thinking') ? '3.8 Live Thinking' : '3.8 Live';
+    const clsShort = clsId.replace(/^gemini-/, '').replace(/-/g, ' ');
+    badge.textContent = `Cloud · ${liveShort} · ${clsShort}`;
+  }
+}
+
+function syncThinkingFieldVisibility() {
+  const info = state.models.find((m) => m.id === $('modelSelect')?.value);
+  if ($('thinkingField')) {
+    $('thinkingField').style.display = info?.supportsThinking ? 'block' : 'none';
   }
 }
 
 function applyEngineUi(engine) {
   state.engine = engine;
+  try { localStorage.setItem('prof-engine', engine); } catch {}
   $('engineGrid').querySelectorAll('.mode-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.engine === engine);
   });
   $('localEngineFields').style.display = engine === 'local' ? 'block' : 'none';
   $('geminiEngineFields').style.display = engine === 'gemini' ? 'block' : 'none';
+  syncThinkingFieldVisibility();
   updateEngineSummaryBadge();
   if (!state.connected) {
     if (engine === 'local') {
@@ -3493,8 +3504,15 @@ function applyEngineUi(engine) {
 }
 
 $('localModelSelect')?.addEventListener('change', updateEngineSummaryBadge);
-$('geminiClassModelSelect')?.addEventListener('change', updateEngineSummaryBadge);
-$('modelSelect')?.addEventListener('change', updateEngineSummaryBadge);
+$('geminiClassModelSelect')?.addEventListener('change', () => {
+  try { localStorage.setItem('prof-gemini-class-model', $('geminiClassModelSelect').value); } catch {}
+  updateEngineSummaryBadge();
+});
+$('modelSelect')?.addEventListener('change', () => {
+  try { localStorage.setItem('prof-gemini-live-model', $('modelSelect').value); } catch {}
+  syncThinkingFieldVisibility();
+  updateEngineSummaryBadge();
+});
 
 $('engineGrid').addEventListener('click', (e) => {
   const btn = e.target.closest('.mode-btn');
@@ -3615,6 +3633,10 @@ async function init() {
     opt.textContent = m.label;
     modelSel.appendChild(opt);
   }
+  try {
+    const savedLive = localStorage.getItem('prof-gemini-live-model');
+    if (savedLive && state.models.some((m) => m.id === savedLive)) modelSel.value = savedLive;
+  } catch {}
 
   const classModelSel = $('geminiClassModelSelect');
   if (classModelSel) {
@@ -3624,6 +3646,10 @@ async function init() {
       opt.textContent = cm.label;
       classModelSel.appendChild(opt);
     }
+    try {
+      const savedCls = localStorage.getItem('prof-gemini-class-model');
+      if (savedCls && (cfg.classModels || []).some((cm) => cm.id === savedCls)) classModelSel.value = savedCls;
+    } catch {}
   }
 
   const voiceSel = $('voiceSelect');
@@ -3658,7 +3684,14 @@ async function init() {
   if (cfg.domainProfile) applyDomainProfile(cfg.domainProfile);
   await loadMaterials();
 
-  applyEngineUi(cfg.ollama?.running ? 'local' : 'gemini');
+  let preferredEngine = cfg.ollama?.running ? 'local' : 'gemini';
+  try {
+    const savedEng = localStorage.getItem('prof-engine');
+    if (savedEng === 'gemini' || (savedEng === 'local' && cfg.ollama?.running)) {
+      preferredEngine = savedEng;
+    }
+  } catch {}
+  applyEngineUi(preferredEngine);
 }
 
 init();
