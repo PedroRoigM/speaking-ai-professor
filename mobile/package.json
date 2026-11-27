@@ -1,0 +1,19 @@
+{
+  "name": "speaking-ai-professor-mobile",
+  "version": "1.2.0",
+  "private": true,
+  "description": "Cloud-only Android APK for Speaking AI Professor (PDF.js + 12-template animated chalkboard + Gemini Cloud + Native Android TTS, zero local models).",
+  "scripts": {
+    "sync:assets": "node scripts/sync-assets.mjs",
+    "cap:sync": "npm run sync:assets && npx cap sync android",
+    "apk:debug": "npm run cap:sync && cd android && ./gradlew assembleDebug",
+    "apk:release": "npm run cap:sync && cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.2.0",
+    "@capacitor/core": "^7.2.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.2.0"
+  }
+}

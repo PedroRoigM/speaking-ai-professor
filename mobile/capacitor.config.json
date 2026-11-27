@@ -1,0 +1,12 @@
+{
+  "appId": "com.pedroroig.speakingaiprofessor",
+  "appName": "Speaking AI Professor",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0f131a"
+  }
+}

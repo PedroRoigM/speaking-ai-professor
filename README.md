@@ -102,6 +102,7 @@ Download the standalone installer for your computer from [**GitHub Releases**](h
 | **macOS (Apple Silicon & Intel)** | `Speaking-AI-Professor-*-mac-arm64.dmg` / `x64.dmg` | Drag to Applications · Built-in PDF.js engine · Native macOS voice · Ollama $0 + Gemini Cloud |
 | **Windows 10 / 11** | `Speaking-AI-Professor-*-Windows-Setup.exe` *(or Portable `.exe`)* | Standard installer + Start Menu shortcut · Built-in PDF.js engine · Native Windows SAPI voice · Ollama $0 + Gemini Cloud |
 | **Linux** | `Speaking-AI-Professor-*-Linux-x64.AppImage` | Executable AppImage · Built-in PDF.js engine · Ollama $0 + Gemini Cloud |
+| **Android (Phone & Tablet)** | `Speaking-AI-Professor-*-Android.apk` | Direct APK install · Built-in PDF.js + 12-template chalkboard · Native Android TTS · **Gemini Cloud-only** (zero local models to protect phone battery & RAM) |
 
 > **AI Engine**: Install [**Ollama**](https://ollama.com/download) for **100% local $0** classes (recommended on PC/Mac), or paste a free [**Gemini API Key**](https://aistudio.google.com/apikey) inside **Ajustes** for instant cloud classes.
 
@@ -278,6 +279,7 @@ Descarga el instalador para tu ordenador desde [**GitHub Releases**](https://git
 - **macOS (Apple Silicon / Intel)**: abre el `.dmg` y arrastra **Speaking AI Professor** a *Aplicaciones*.
 - **Windows 10 / 11**: ejecuta `Speaking-AI-Professor-*-Windows-Setup.exe` (o usa la versión `Portable.exe` sin instalar).
 - **Linux**: ejecuta el `.AppImage`.
+- **Android (móvil y tablet)**: descarga `Speaking-AI-Professor-*-Android.apk` e instálalo directamente (**100 % en la nube con Gemini Cloud**, sin modelos locales para no sobrecargar el teléfono).
 
 Para clases **100 % locales y gratis ($0)** solo necesitas instalar [**Ollama**](https://ollama.com/download) y descargar un modelo (desde la propia app en *Ajustes*). Si prefieres no usar tu GPU, pega una **API Key gratuita de Google Gemini** en *Ajustes*.
 

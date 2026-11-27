@@ -1,4 +1,4 @@
-name: Build Desktop Installers (macOS · Windows · Linux)
+name: Build Installers (macOS · Windows · Linux · Android APK)
 
 on:
   workflow_dispatch:
@@ -58,9 +58,58 @@ jobs:
             dist/*.AppImage
           if-no-files-found: error
 
+  build-android:
+    name: Build Android (.apk · Cloud-Only)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install root & mobile dependencies
+        run: |
+          npm ci
+          npm --prefix mobile ci
+
+      - name: Sync shared assets & Capacitor Android project
+        run: |
+          npm --prefix mobile run cap:sync
+          node --check mobile/www/mobileApp.js
+
+      - name: Build installable Android APK
+        run: |
+          cd mobile/android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Package versioned APK
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          mkdir -p dist
+          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk "dist/Speaking-AI-Professor-${VERSION}-Android.apk"
+          ls -lh dist/*.apk
+
+      - name: Upload Android APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-Android-apk
+          path: dist/*.apk
+          if-no-files-found: error
+
   release:
     name: Publish GitHub Release
-    needs: build
+    needs: [build, build-android]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
@@ -70,7 +119,7 @@ jobs:
           path: release-assets
           merge-multiple: true
 
-      - name: Create GitHub Release with installers
+      - name: Create GitHub Release with all installers
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
@@ -78,3 +127,4 @@ jobs:
             release-assets/*.dmg
             release-assets/*.exe
             release-assets/*.AppImage
+            release-assets/*.apk
