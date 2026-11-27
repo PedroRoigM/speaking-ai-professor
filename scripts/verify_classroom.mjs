@@ -310,13 +310,21 @@ await check('Agente Investigador Web: Gating, Ranking Fiable, Bloqueo SEO/SSRF y
   return `gating + SEO/SSRF bloqueados + agente 4-fases (${b1.status}/${b1.confidence} · ${topDoms}) + caché repetible OK`;
 });
 
-await check('Multiplataforma (macOS / Windows / Linux): Voces Nativas y WAV Parser', () => {
+await check('Multiplataforma (macOS / Windows / Linux): Voces Neural HD Natural (0 MB) y WAV Parser', async () => {
   const winVoices = getLocalVoicesForPlatform('win32');
   const linVoices = getLocalVoicesForPlatform('linux');
   const macVoices = getLocalVoicesForPlatform('darwin');
-  assert.ok(winVoices.some((v) => v.id === 'windows:es'), 'Falta voz Windows SAPI ES');
-  assert.ok(linVoices.some((v) => v.id === 'linux:es'), 'Falta voz Linux espeak-ng ES');
-  assert.ok(macVoices.some((v) => v.id === 'macos:Mónica'), 'Falta voz macOS ES');
+  assert.ok(winVoices.some((v) => v.id === 'edge:es-ES-AlvaroNeural'), 'Falta voz Neural HD Álvaro en Windows');
+  assert.ok(macVoices.some((v) => v.id === 'edge:es-ES-AlvaroNeural'), 'Falta voz Neural HD Álvaro en macOS');
+  assert.ok(winVoices.some((v) => v.id === 'windows:es'), 'Falta fallback Windows offline ES');
+  assert.ok(linVoices.some((v) => v.id === 'linux:es'), 'Falta fallback Linux offline ES');
+  assert.ok(macVoices.some((v) => v.id === 'macos:Mónica'), 'Falta fallback macOS offline ES');
+
+  // Verify live Neural HD synthesis returns clean MP3 audio (0 MB local footprint!)
+  const { LocalVoiceEngine } = await importLocal('lib', 'localVoice.mjs');
+  const ve = new LocalVoiceEngine({ appDir: APP_DIR });
+  const sample = await ve.synthesize('Prueba de voz natural.', { voiceId: 'edge:es-ES-AlvaroNeural', language: 'es' });
+  assert.ok(sample.ok && sample.pcmBase64.length > 200, `Neural HD TTS falló: ${JSON.stringify(sample)}`);
 
   // Verify WAV fmt sampleRate extraction (e.g. 22050 Hz from Windows SAPI)
   const dummyPcm = Buffer.alloc(440);
@@ -326,7 +334,7 @@ await check('Multiplataforma (macOS / Windows / Linux): Voces Nativas y WAV Pars
   assert.strictEqual(parsed.pcm.length, 440, 'Longitud PCM incorrecta');
 
   const plat = getPlatformSummary();
-  return `${plat.osLabel} (${plat.arch}) · catálogos Win/Linux/Mac + WAV parser OK`;
+  return `${plat.osLabel} (${plat.arch}) · ${sample.engine} (${sample.audioMime || 'pcm'}) + offline Win/Mac/Linux OK`;
 });
 
 await check('Desktop Zero-Dependencies: JS Math Verifier + PDF.js Fallback + Electron Syntax', async () => {

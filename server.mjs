@@ -366,7 +366,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && pathname === '/api/voice/test') {
       const body = await readJsonBody(req, 1024 * 16);
-      const voiceId = String(body.voiceId || 'kokoro:em_alex');
+      const voiceId = String(body.voiceId || 'edge:es-ES-AlvaroNeural');
       const language = String(body.language || 'es');
       const sampleText =
         language === 'en'
@@ -377,6 +377,7 @@ const server = http.createServer(async (req, res) => {
         ok: Boolean(audio.ok && audio.pcmBase64),
         engine: audio.engine || 'unknown',
         sampleRate: audio.sampleRate || 24000,
+        audioMime: audio.audioMime || 'audio/pcm',
         pcmBase64: audio.pcmBase64 || '',
       });
     }
@@ -561,7 +562,7 @@ wss.on('connection', (clientWs) => {
     engine: activeEngine,
     localModel: activeConfig?.localModel || 'qwen3.5:9b',
     geminiClassModel: normalizeGeminiClassModelId(activeConfig?.geminiClassModel),
-    localVoice: activeConfig?.localVoice || 'kokoro:em_alex',
+    localVoice: activeConfig?.localVoice || 'edge:es-ES-AlvaroNeural',
     language: activeConfig?.language || 'es',
     webSearch: Boolean(activeConfig?.webSearch),
     folderName: library.domainProfile?.folderName || '',

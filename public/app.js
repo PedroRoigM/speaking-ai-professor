@@ -479,9 +479,62 @@ function notifyAudioDrainedIfReady() {
   }
 }
 
-function playPcm24Chunk(base64Pcm, mimeType = 'audio/pcm;rate=24000') {
-  const int16 = base64ToInt16(base64Pcm);
-  if (!int16.length) return;
+function base64ToUint8Array(base64) {
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function playFallbackBlobHtmlAudio(base64, mimeType, myGen) {
+  return new Promise((resolve) => {
+    try {
+      const bytes = base64ToUint8Array(base64);
+      const blob = new Blob([bytes], { type: mimeType || 'audio/mpeg' });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      state.fallbackAudioEl = audio;
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(guard);
+        URL.revokeObjectURL(url);
+        if (state.fallbackAudioEl === audio) state.fallbackAudioEl = null;
+        resolve();
+      };
+      const guard = setTimeout(finish, 30000);
+      audio.onended = finish;
+      audio.onerror = finish;
+      if (myGen !== state.playbackGen) return finish();
+      audio.play().catch(finish);
+    } catch {
+      resolve();
+    }
+  });
+}
+
+async function decodeBase64ToAudioBuffer(base64, sampleRate = 24000, audioMime = 'audio/pcm') {
+  if (!base64 || !state.playbackCtx) return null;
+  if (String(audioMime || '').includes('mpeg') || String(audioMime || '').includes('mp3')) {
+    const bytes = base64ToUint8Array(base64);
+    if (!bytes.length) return null;
+    return await state.playbackCtx.decodeAudioData(bytes.buffer.slice(0));
+  }
+  const int16 = base64ToInt16(base64);
+  if (!int16.length) return null;
+  const float32 = new Float32Array(int16.length);
+  for (let i = 0; i < int16.length; i++) {
+    float32[i] = int16[i] / (int16[i] < 0 ? 0x8000 : 0x7fff);
+  }
+  const audioBuffer = state.playbackCtx.createBuffer(1, float32.length, sampleRate);
+  audioBuffer.copyToChannel(float32, 0);
+  return audioBuffer;
+}
+
+function playPcm24Chunk(base64Audio, mimeType = 'audio/pcm;rate=24000') {
+  if (!base64Audio) return;
+  const isMp3 = String(mimeType || '').includes('mpeg') || String(mimeType || '').includes('mp3');
   const rateMatch = String(mimeType || '').match(/rate=(\d+)/i);
   const sampleRate = rateMatch ? Number(rateMatch[1]) || 24000 : 24000;
   const myGen = state.playbackGen;
@@ -495,19 +548,26 @@ function playPcm24Chunk(base64Pcm, mimeType = 'audio/pcm;rate=24000') {
       } catch {}
     }
 
-    // If Web Audio Context is still suspended (e.g. Safari autoplay policy), fall back to HTML5 <audio> WAV
+    // If Web Audio Context is still suspended (e.g. autoplay policy), fall back to HTML5 <audio>
     if (state.playbackCtx.state !== 'running') {
-      await playFallbackWavHtmlAudio(int16, sampleRate, myGen);
+      if (isMp3) {
+        await playFallbackBlobHtmlAudio(base64Audio, 'audio/mpeg', myGen);
+      } else {
+        const int16 = base64ToInt16(base64Audio);
+        if (int16.length) await playFallbackWavHtmlAudio(int16, sampleRate, myGen);
+      }
       return;
     }
 
-    const float32 = new Float32Array(int16.length);
-    for (let i = 0; i < int16.length; i++) {
-      float32[i] = int16[i] / (int16[i] < 0 ? 0x8000 : 0x7fff);
+    let audioBuffer;
+    try {
+      audioBuffer = await decodeBase64ToAudioBuffer(base64Audio, sampleRate, isMp3 ? 'audio/mpeg' : 'audio/pcm');
+    } catch (err) {
+      console.error('[Audio decode error]', err);
+      if (isMp3) await playFallbackBlobHtmlAudio(base64Audio, 'audio/mpeg', myGen);
+      return;
     }
-
-    const audioBuffer = state.playbackCtx.createBuffer(1, float32.length, sampleRate);
-    audioBuffer.copyToChannel(float32, 0);
+    if (!audioBuffer || myGen !== state.playbackGen) return;
 
     const src = state.playbackCtx.createBufferSource();
     src.buffer = audioBuffer;
@@ -565,28 +625,25 @@ function prewarmTimelineSegment(seg) {
       seg._preloadedImg = img;
     }
   }
-  if (seg.audioBase64 && state.playbackCtx && !seg._decodedBuffer) {
-    try {
-      const int16 = base64ToInt16(seg.audioBase64);
-      if (int16.length) {
-        const float32 = new Float32Array(int16.length);
-        for (let i = 0; i < int16.length; i++) {
-          float32[i] = int16[i] / (int16[i] < 0 ? 0x8000 : 0x7fff);
-        }
-        const sr = seg.sampleRate || 24000;
-        const audioBuffer = state.playbackCtx.createBuffer(1, float32.length, sr);
-        audioBuffer.copyToChannel(float32, 0);
-        seg._decodedBuffer = audioBuffer;
-      }
-    } catch {}
+  if (seg.audioBase64 && state.playbackCtx && !seg._decodedBuffer && !seg._decoding) {
+    seg._decoding = true;
+    decodeBase64ToAudioBuffer(seg.audioBase64, seg.sampleRate || 24000, seg.audioMime || 'audio/pcm')
+      .then((buf) => {
+        if (buf) seg._decodedBuffer = buf;
+      })
+      .catch(() => {})
+      .finally(() => {
+        seg._decoding = false;
+      });
   }
 }
 
 // ---------------- Synchronized Dual-Queue AV Timeline Player (0ms Drift + Anti-Freeze Watchdog!) ----------------
-function playAtomicAudioSegment(base64Pcm, sampleRate = 24000, myGen, predecodedBuffer = null) {
+function playAtomicAudioSegment(base64Audio, sampleRate = 24000, myGen, predecodedBuffer = null, audioMime = 'audio/pcm') {
   return new Promise(async (resolve) => {
     if (myGen !== state.playbackGen) return resolve(false);
-    if (!base64Pcm && !predecodedBuffer) return resolve(true);
+    if (!base64Audio && !predecodedBuffer) return resolve(true);
+    const isMp3 = String(audioMime || '').includes('mpeg') || String(audioMime || '').includes('mp3');
 
     ensurePlaybackContext();
     if (state.playbackCtx.state !== 'running') {
@@ -599,22 +656,30 @@ function playAtomicAudioSegment(base64Pcm, sampleRate = 24000, myGen, predecoded
     if (myGen !== state.playbackGen) return resolve(false);
 
     if (state.playbackCtx.state !== 'running') {
-      const int16 = base64ToInt16(base64Pcm);
-      if (!int16.length) return resolve(true);
-      await playFallbackWavHtmlAudio(int16, sampleRate, myGen);
+      if (isMp3) {
+        await playFallbackBlobHtmlAudio(base64Audio, 'audio/mpeg', myGen);
+      } else {
+        const int16 = base64ToInt16(base64Audio);
+        if (!int16.length) return resolve(true);
+        await playFallbackWavHtmlAudio(int16, sampleRate, myGen);
+      }
       return resolve(myGen === state.playbackGen);
     }
 
     let audioBuffer = predecodedBuffer;
     if (!audioBuffer) {
-      const int16 = base64ToInt16(base64Pcm);
-      if (!int16.length) return resolve(true);
-      const float32 = new Float32Array(int16.length);
-      for (let i = 0; i < int16.length; i++) {
-        float32[i] = int16[i] / (int16[i] < 0 ? 0x8000 : 0x7fff);
+      try {
+        audioBuffer = await decodeBase64ToAudioBuffer(base64Audio, sampleRate, audioMime);
+      } catch (err) {
+        console.error('[Segment audio decode error]', err);
+        if (isMp3) {
+          await playFallbackBlobHtmlAudio(base64Audio, 'audio/mpeg', myGen);
+          return resolve(myGen === state.playbackGen);
+        }
+        return resolve(true);
       }
-      audioBuffer = state.playbackCtx.createBuffer(1, float32.length, sampleRate);
-      audioBuffer.copyToChannel(float32, 0);
+      if (!audioBuffer) return resolve(true);
+      if (myGen !== state.playbackGen) return resolve(false);
     }
 
     const src = state.playbackCtx.createBufferSource();
@@ -818,7 +883,13 @@ async function pumpTimeline() {
       // 3. Play THIS segment's audio and WAIT until its exact last sample finishes (with anti-freeze watchdog!)
       let completedAudio = true;
       try {
-        completedAudio = await playAtomicAudioSegment(seg.audioBase64, seg.sampleRate || 24000, myGen, seg._decodedBuffer || null);
+        completedAudio = await playAtomicAudioSegment(
+          seg.audioBase64,
+          seg.sampleRate || 24000,
+          myGen,
+          seg._decodedBuffer || null,
+          seg.audioMime || 'audio/pcm',
+        );
       } catch (err) {
         console.error('[Audio playback isolated error]', err);
         completedAudio = myGen === state.playbackGen;
@@ -2838,33 +2909,45 @@ function triggerInterrupt() {
 }
 $('interruptBtn').addEventListener('click', triggerInterrupt);
 
-$('testAudioBtn').addEventListener('click', async () => {
+async function runVoiceTest(triggerBtn = null) {
   ensurePlaybackContext();
-  const btn = $('testAudioBtn');
-  btn.disabled = true;
-  btn.textContent = 'Probando...';
+  const btn = triggerBtn || $('testAudioBtn');
+  const origLabel = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Probando...';
+  }
   try {
     const res = await fetch('/api/voice/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        voiceId: $('localVoiceSelect').value || 'kokoro:em_alex',
+        voiceId: $('localVoiceSelect').value || 'edge:es-ES-AlvaroNeural',
         language: $('langSelect').value === 'en' ? 'en' : 'es',
       }),
     });
     const data = await res.json();
     if (data.ok && data.pcmBase64) {
-      playPcm24Chunk(data.pcmBase64, `audio/pcm;rate=${data.sampleRate || 24000}`);
+      const mime = data.audioMime === 'audio/mpeg' ? 'audio/mpeg' : `audio/pcm;rate=${data.sampleRate || 24000}`;
+      playPcm24Chunk(data.pcmBase64, mime);
       appendTranscript('system', `🔊 Audio OK (${data.engine} · ${data.sampleRate}Hz · AudioContext=${state.playbackCtx?.state}).`);
     } else {
-      appendTranscript('system', '⚠️ El motor de voz devolvió audio vacío. Prueba cambiando Local Voice a macOS Nativo.');
+      appendTranscript('system', '⚠️ El motor de voz devolvió audio vacío. Prueba seleccionando otra voz en Ajustes.');
     }
   } catch (err) {
     appendTranscript('system', `Error probando audio: ${err.message}`);
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Probar voz';
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = origLabel || 'Probar voz';
+    }
   }
+}
+
+$('testAudioBtn').addEventListener('click', () => runVoiceTest($('testAudioBtn')));
+$('settingsTestVoiceBtn')?.addEventListener('click', () => runVoiceTest($('settingsTestVoiceBtn')));
+$('localVoiceSelect')?.addEventListener('change', () => {
+  try { localStorage.setItem('prof-local-voice', $('localVoiceSelect').value); } catch {}
 });
 
 window.addEventListener('keydown', (e) => {
@@ -4185,14 +4268,19 @@ async function init() {
     opt.textContent = lv.label;
     localVoiceSel.appendChild(opt);
   }
-  if (!state.voiceCapabilities.kokoro) {
-    const nativeId = cfg.defaultNativeVoice || (cfg.platform === 'win32' ? 'windows:es' : cfg.platform === 'linux' ? 'linux:es' : 'macos:Mónica');
-    localVoiceSel.value = nativeId;
-    const nativeLabel = cfg.platform === 'win32' ? '· Windows SAPI' : cfg.platform === 'linux' ? '· Linux Nativo' : '· macOS Nativo';
-    $('voiceCapBadge').textContent = nativeLabel;
+  const defaultVoiceId = cfg.defaultNativeVoice || 'edge:es-ES-AlvaroNeural';
+  let savedVoice = '';
+  try { savedVoice = localStorage.getItem('prof-local-voice') || ''; } catch {}
+  if (savedVoice && (cfg.localVoices || []).some((v) => v.id === savedVoice)) {
+    localVoiceSel.value = savedVoice;
   } else {
-    localVoiceSel.value = 'kokoro:em_alex';
-    $('voiceCapBadge').textContent = '· Kokoro Neural READY';
+    localVoiceSel.value = defaultVoiceId;
+  }
+  if (state.voiceCapabilities.kokoro) {
+    $('voiceCapBadge').textContent = '· Neural HD + Kokoro Offline';
+    $('voiceCapBadge').style.color = 'var(--emerald)';
+  } else {
+    $('voiceCapBadge').textContent = '· Neural HD Natural (0 MB)';
     $('voiceCapBadge').style.color = 'var(--emerald)';
   }
 

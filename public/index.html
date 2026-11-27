@@ -483,8 +483,11 @@
             <select id="localModelSelect"></select>
           </div>
           <div class="field">
-            <label for="localVoiceSelect">Voz neuronal <span id="voiceCapBadge" class="inline-status"></span></label>
-            <select id="localVoiceSelect"></select>
+            <label for="localVoiceSelect">Voz natural <span id="voiceCapBadge" class="inline-status"></span></label>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <select id="localVoiceSelect" style="flex:1; min-width:0;"></select>
+              <button id="settingsTestVoiceBtn" type="button" class="btn btn-xs btn-subtle" title="Escuchar una muestra de la voz seleccionada" style="white-space:nowrap;">🔊 Probar</button>
+            </div>
           </div>
         </div>
         <div id="quickPullBar" class="quick-pull-bar"></div>
