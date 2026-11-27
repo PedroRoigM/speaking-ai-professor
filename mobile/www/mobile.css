@@ -727,6 +727,51 @@ html, body {
   border-color: var(--accent);
 }
 
+/* Mobile Interactive Tour */
+.m-tour-tips {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.48;
+  color: var(--ink);
+}
+.m-tour-tips li {
+  margin-bottom: 5px;
+}
+.m-tour-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.m-tour-actions:empty {
+  display: none;
+}
+.m-tour-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding-top: 4px;
+}
+.m-tour-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  border: none;
+  padding: 0;
+  background: var(--border);
+  cursor: pointer;
+}
+.m-tour-dot.active {
+  width: 22px;
+  background: var(--accent);
+}
+.m-tour-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 /* Toast */
 .m-toast {
   position: fixed;

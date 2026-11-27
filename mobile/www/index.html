@@ -23,6 +23,9 @@
           📂 PDF
         </label>
         <input id="pdfFileInput" type="file" accept="application/pdf,.pdf" hidden />
+        <button id="openMobileTourBtn" class="m-btn m-btn-ghost m-btn-icon" type="button" aria-label="Tutorial interactivo" title="Guía rápida">
+          ?
+        </button>
         <button id="openSettingsBtn" class="m-btn m-btn-ghost m-btn-icon" type="button" aria-label="Ajustes" title="Ajustes">
           ⚙
         </button>
@@ -187,6 +190,27 @@
         <button id="saveSettingsBtn" class="m-btn m-btn-primary m-btn-full" type="button">
           Guardar ajustes
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interactive Mobile Quick-Start Tutorial Modal -->
+  <div class="m-modal-backdrop" id="mobileTourModal" hidden>
+    <div class="m-modal" role="dialog" aria-modal="true" aria-labelledby="mTourTitle">
+      <div class="m-modal-head">
+        <span class="m-badge" id="mTourStepBadge">Paso 1 de 5</span>
+        <button id="closeMobileTourBtn" class="m-btn m-btn-ghost m-btn-icon" type="button" aria-label="Cerrar tutorial">✕</button>
+      </div>
+      <div class="m-modal-body">
+        <h3 id="mTourTitle" style="margin:0; font-size:17px;"></h3>
+        <p id="mTourBody" style="margin:0; font-size:13.5px; line-height:1.5; color:var(--ink-muted);"></p>
+        <ul id="mTourTips" class="m-tour-tips"></ul>
+        <div id="mTourActions" class="m-tour-actions"></div>
+        <div id="mTourDots" class="m-tour-dots"></div>
+      </div>
+      <div class="m-modal-foot m-tour-foot">
+        <button id="mTourPrevBtn" class="m-btn m-btn-ghost m-btn-sm" type="button">← Anterior</button>
+        <button id="mTourNextBtn" class="m-btn m-btn-primary m-btn-sm" type="button">Siguiente →</button>
       </div>
     </div>
   </div>

@@ -923,11 +923,131 @@ function closeSettingsModal() {
   $('settingsModal').hidden = true;
 }
 
+// ---------------- Interactive Mobile Tutorial ----------------
+const MOBILE_TOUR_KEY = 'sap_mobile_tour_seen_v1';
+const MOBILE_TOUR_STEPS = [
+  {
+    title: '🎓 Tu profesor interactivo en el móvil',
+    body: 'Speaking AI Professor lee tus PDFs página a página, te los explica en voz alta y dibuja esquemas en la pizarra en tiempo real — adaptado a cualquier asignatura.',
+    tips: [
+      'Esta app Android funciona 100 % con Google Gemini Cloud (sin modelos locales) para cuidar la batería y memoria del teléfono.',
+      'Puedes probarla al instante sin PDF tocando «✨ Probar lección de muestra».',
+    ],
+  },
+  {
+    title: '📂 Abre cualquier PDF de tu móvil',
+    body: 'Pulsa «📂 PDF» arriba para cargar apuntes desde Descargas, Google Drive o WhatsApp.',
+    tips: [
+      'Se adapta al temario real: mapas conceptuales, líneas temporales y comparativas para letras o ciencias, y diagramas técnicos para ingeniería.',
+      'Pre-carga la página siguiente en segundo plano para avanzar sin esperas.',
+    ],
+  },
+  {
+    title: '🔀 Vista Doble, PDF o Pizarra',
+    body: 'En vertical cambia con 1 toque entre «🔀 Doble», «📄 PDF» y «📐 Pizarra». Si giras el móvil en horizontal (o usas tablet), verás PDF y Pizarra 50/50 lado a lado.',
+    tips: [
+      'Usa «▶ Dar clase» / «⏸ Pausar», «◀ / ▶» para cambiar de página y toca «Pág X/Y» para saltar a cualquier número de página.',
+      'Toca «⏭» para pasar al siguiente paso o «🔊 / 🔇» para activar o silenciar la voz.',
+    ],
+  },
+  {
+    title: '💬 Pregunta dudas por texto o voz (opcional)',
+    body: 'Escribe cualquier duda en la barra inferior para pausar al profesor y recibir una explicación directa sobre la página actual.',
+    tips: [
+      'El botón «🎤» es totalmente opcional: si prefieres no usar micrófono, puedes estudiar 100 % escribiendo.',
+      'Cuando termine de responderte, pulsa «▶ Reanudar» para retomar la clase donde ibas.',
+    ],
+  },
+  {
+    title: '⚙ Ajustes: API Key gratuita, Modelo, Voz y Tema',
+    body: 'Pulsa «⚙» arriba a la derecha para pegar tu API Key gratuita de Google AI Studio, cambiar de modelo Gemini, ajustar la velocidad de voz o elegir tema visual.',
+    tips: [
+      'Modelos disponibles: Gemini 3.5 Flash (recomendado y gratis), 3.5 Flash-Lite (ultra rápido) y 4 Hydrogen.',
+      'Temas ergonómicos: Papel cálido, Sepia (baja luz azul) y Noche slate.',
+    ],
+    actions: [
+      { label: 'Probar Sepia', run: () => { state.settings.theme = 'sepia'; saveSettings(state.settings); applyTheme('sepia'); } },
+      { label: 'Probar Noche', run: () => { state.settings.theme = 'slate'; saveSettings(state.settings); applyTheme('slate'); } },
+      { label: 'Abrir Ajustes (API Key)', run: () => { closeMobileTour(); openSettingsModal(); } },
+    ],
+  },
+];
+
+let mobileTourIdx = 0;
+
+function renderMobileTourStep(idx) {
+  const total = MOBILE_TOUR_STEPS.length;
+  mobileTourIdx = Math.max(0, Math.min(total - 1, idx));
+  const st = MOBILE_TOUR_STEPS[mobileTourIdx];
+  $('mTourStepBadge').textContent = `Paso ${mobileTourIdx + 1} de ${total}`;
+  $('mTourTitle').textContent = st.title;
+  $('mTourBody').textContent = st.body;
+
+  const tipsEl = $('mTourTips');
+  tipsEl.innerHTML = '';
+  for (const t of st.tips || []) {
+    const li = document.createElement('li');
+    li.textContent = t;
+    tipsEl.appendChild(li);
+  }
+
+  const actEl = $('mTourActions');
+  actEl.innerHTML = '';
+  for (const a of st.actions || []) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'm-btn m-btn-ghost m-btn-sm';
+    b.textContent = a.label;
+    b.addEventListener('click', a.run);
+    actEl.appendChild(b);
+  }
+
+  const dotsEl = $('mTourDots');
+  dotsEl.innerHTML = '';
+  for (let i = 0; i < total; i++) {
+    const d = document.createElement('button');
+    d.type = 'button';
+    d.className = `m-tour-dot${i === mobileTourIdx ? ' active' : ''}`;
+    d.addEventListener('click', () => renderMobileTourStep(i));
+    dotsEl.appendChild(d);
+  }
+
+  $('mTourPrevBtn').disabled = mobileTourIdx === 0;
+  $('mTourNextBtn').textContent = mobileTourIdx === total - 1 ? '¡Empezar! ✓' : 'Siguiente →';
+}
+
+function openMobileTour(startIdx = 0) {
+  $('mobileTourModal').hidden = false;
+  renderMobileTourStep(startIdx);
+}
+
+function closeMobileTour() {
+  $('mobileTourModal').hidden = true;
+  try { localStorage.setItem(MOBILE_TOUR_KEY, '1'); } catch {}
+}
+
 // ---------------- Event Wiring ----------------
 function initApp() {
   applyTheme(state.settings.theme);
   updateTopCloudPill();
   syncTransportUi();
+
+  $('openMobileTourBtn')?.addEventListener('click', () => openMobileTour(0));
+  $('closeMobileTourBtn')?.addEventListener('click', closeMobileTour);
+  $('mobileTourModal')?.addEventListener('click', (ev) => {
+    if (ev.target === $('mobileTourModal')) closeMobileTour();
+  });
+  $('mTourPrevBtn')?.addEventListener('click', () => renderMobileTourStep(mobileTourIdx - 1));
+  $('mTourNextBtn')?.addEventListener('click', () => {
+    if (mobileTourIdx >= MOBILE_TOUR_STEPS.length - 1) closeMobileTour();
+    else renderMobileTourStep(mobileTourIdx + 1);
+  });
+
+  try {
+    if (localStorage.getItem(MOBILE_TOUR_KEY) !== '1') {
+      setTimeout(() => openMobileTour(0), 350);
+    }
+  } catch {}
 
   // View Switcher (Portrait)
   document.querySelectorAll('#viewTabs .m-tab').forEach((btn) => {

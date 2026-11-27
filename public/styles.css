@@ -2423,6 +2423,154 @@ textarea::placeholder {
   color: var(--text);
 }
 
+/* ================= INTERACTIVE SPOTLIGHT TUTORIAL TOUR ================= */
+.tour-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  pointer-events: auto;
+}
+.tour-overlay[hidden] {
+  display: none;
+}
+.tour-spotlight {
+  position: fixed;
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(8, 12, 20, 0.62), 0 0 0 3px var(--accent), 0 0 28px rgba(37, 99, 235, 0.45);
+  pointer-events: none;
+  transition: top 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    left 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease;
+}
+.tour-spotlight.centered {
+  top: 50% !important;
+  left: 50% !important;
+  width: 0 !important;
+  height: 0 !important;
+  box-shadow: 0 0 0 9999px rgba(8, 12, 20, 0.64);
+}
+.tour-card {
+  position: fixed;
+  width: 410px;
+  max-width: calc(100vw - 28px);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: 0 22px 56px rgba(0, 0, 0, 0.36);
+  z-index: 265;
+  transition: top 0.25s cubic-bezier(0.22, 1, 0.36, 1), left 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tour-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.tour-step-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.tour-title {
+  margin: 0 0 7px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.tour-body {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.tour-extra {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.tour-extra:empty {
+  display: none;
+}
+.tour-tip-list {
+  margin: 0;
+  padding-left: 17px;
+  font-size: 12.5px;
+  line-height: 1.48;
+  color: var(--text);
+}
+.tour-tip-list li {
+  margin-bottom: 4px;
+}
+.tour-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.tour-kbd-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  font-size: 12px;
+}
+.tour-kbd-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+}
+.tour-kbd-item kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  white-space: nowrap;
+}
+.tour-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 14px 0 12px;
+}
+.tour-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  border: none;
+  padding: 0;
+  background: var(--border);
+  cursor: pointer;
+  transition: width 0.2s ease, background 0.2s ease;
+}
+.tour-dot.active {
+  width: 22px;
+  background: var(--accent);
+}
+.tour-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 /* ================= RESPONSIVE & REDUCED MOTION ================= */
 @media (max-width: 1180px) {
   .workspace-grid { grid-template-columns: 244px minmax(0, 1fr) 288px; }

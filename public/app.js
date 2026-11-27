@@ -3866,6 +3866,272 @@ $('openBootstrapFromSettingsBtn')?.addEventListener('click', () => {
   openLocalBootstrapModal();
 });
 
+// ---------------- Interactive Guided Spotlight Tutorial Tour ----------------
+const TOUR_STORAGE_KEY = 'sap-tour-seen-v1';
+const DESKTOP_TOUR_STEPS = [
+  {
+    selector: null,
+    title: '🎓 Bienvenido a Speaking AI Professor',
+    body: 'Tu aula interactiva de doble pantalla: proyecta tus PDFs a la izquierda, dibuja esquemas sincronizados a la derecha y habla contigo en tiempo real — gratis en local ($0) o con Gemini Cloud.',
+    tips: [
+      'Funciona con cualquier asignatura: literatura, medicina, historia, derecho, economía, física o ingeniería.',
+      'Pulsa «Siguiente» o usa las flechas ← / → de tu teclado para recorrer cada función en 1 minuto.',
+    ],
+  },
+  {
+    selector: '#folderBadgeBtn',
+    title: '1. Cambia de carpeta y carga tus apuntes',
+    body: 'Haz clic en la carpeta superior para abrir cualquier carpeta de tu ordenador (PDF, PPTX, XLSX, DOCX, Markdown o HTML). También puedes arrastrar archivos sueltos en el panel izquierdo.',
+    tips: [
+      'En «Fuentes» puedes activar o desactivar archivos concretos para que el profesor solo estudie lo que necesites.',
+      'Con «Pantalla» o «Imagen» puedes enseñarle capturas de ejercicios, gráficas o problemas escritos a mano.',
+    ],
+    actions: [{ label: 'Probar selector de carpeta', run: () => { closeInteractiveTour(); $('folderBadgeBtn')?.click(); } }],
+  },
+  {
+    selector: '#classSetupBox',
+    title: '2. Inicia una Clase Guiada paso a paso',
+    body: 'Elige cualquier PDF, indica desde qué página empezar (o escribe un tema) y pulsa «Empezar clase». El profesor explicará cada diapositiva con voz y pizarra sincronizadas.',
+    tips: [
+      'Adapta automáticamente la pizarra al temario: mapas conceptuales, líneas temporales y comparativas para letras/ciencias, o diagramas técnicos para ingeniería.',
+      'Si la página incluye un problema numérico, se detiene y lo resuelve paso a paso verificando los cálculos.',
+    ],
+  },
+  {
+    selector: '#modeGrid',
+    title: '3. Elige el estilo de enseñanza',
+    body: 'Cambia cómo enseña el profesor en cualquier momento desde estos 5 modos:',
+    tips: [
+      'Clase continua: recorre tu PDF página a página en doble pantalla.',
+      'Experto en apuntes / Tutor socrático: resuelve dudas o te guía con preguntas sin darte la solución directa.',
+      'Pizarra visual / Simulacro de examen: crea esquemas a demanda o te evalúa como en una defensa oral.',
+    ],
+  },
+  {
+    selector: '#webSearchToggleCard',
+    title: '4. Buscar en internet y Referencias verificadas',
+    body: 'Por defecto el profesor se ciñe 100 % a tus apuntes. Si marcas «Buscar en internet», activa un investigador web de 4 fases que contrasta datos en fuentes fiables (universidades, Wikipedia, arXiv) sin desviarse del tema.',
+    tips: [
+      'Todos los enlaces consultados aparecen clicables en el panel «Referencias web» y se guardan al exportar apuntes.',
+      'Aviso: al activarlo tarda unos segundos extra por consulta para verificar fuentes.',
+    ],
+  },
+  {
+    selector: '#topbarFullscreenBtn',
+    title: '5. Doble pantalla, Pantalla completa (F) y Tinta',
+    body: 'Durante la clase verás tu PDF a la izquierda y la pizarra viva a la derecha. Pulsa «Pantalla completa» (o la tecla F) para estudiar sin distracciones con subtítulos en vivo.',
+    tips: [
+      'Usa el botón «Señalar / Dibujar» del escenario para rodear cualquier fórmula o texto y preguntarle al profesor directamente sobre tu marca.',
+      'Pulsa «Verificar» si alguna vez quieres resincronizar audio y diapositiva al instante.',
+    ],
+  },
+  {
+    selector: '.voice-bar',
+    title: '6. Pregunta por texto o por voz (micrófono opcional)',
+    body: 'Puedes interrumpir al profesor en cualquier momento escribiendo en el chat inferior o activando el micrófono con «Activar micro». El micrófono es 100 % opcional: si tu PC no tiene micro o está bloqueado, todo sigue funcionando perfecto.',
+    tips: [
+      'Pulsa Esc en cualquier momento para pausar al profesor y plantear una duda.',
+      'En el botón de ajustes de audio (icono de barras) tienes Anti-eco, prueba de voz y modo Pulsar para hablar (Espacio).',
+    ],
+  },
+  {
+    selector: '#openSettingsBtn',
+    title: '7. Cambia entre IA Local ($0), Gemini Cloud y Voces',
+    body: 'Desde «Ajustes» puedes alternar en 1 clic entre Ollama Local Gratis ($0) y Google Gemini Cloud (3.8 Live / 3.5 Flash), cambiar de modelo (3B / 4B / 9B / 12B), idioma o voz.',
+    tips: [
+      'En Ajustes → Local ($0) también puedes relanzar en cualquier momento el instalador automático de Ollama y modelos gratuitos.',
+      'En Ajustes → Gemini Cloud solo necesitas pegar tu API Key gratuita de Google AI Studio.',
+    ],
+    actions: [
+      { label: 'Abrir Ajustes ahora', run: () => { closeInteractiveTour(); $('openSettingsBtn')?.click(); } },
+      { label: 'Instalar modelo local $0', run: () => { closeInteractiveTour(); openLocalBootstrapModal(); } },
+    ],
+  },
+  {
+    selector: '#themeSwitcher',
+    title: '8. Temas ergonómicos, Exportar y Atajos rápidos',
+    body: 'Elige entre Claro, Papel (baja luz azul para sesiones largas) o Noche, oculta paneles laterales para concentrarte y pulsa «Exportar» para llevarte todas las pizarras y notas en un HTML sin conexión.',
+    shortcuts: [
+      ['F', 'Pantalla completa 2 pantallas'],
+      ['N', 'Saltar al siguiente paso'],
+      ['Shift + → / ←', 'Cambiar página PDF'],
+      ['Esc', 'Interrumpir / pausar'],
+      ['Espacio', 'Pulsar para hablar (PTT)'],
+      ['? Guía', 'Reabrir este tutorial'],
+    ],
+    actions: [
+      { label: 'Probar tema Papel', run: () => document.querySelector('[data-theme-opt="sepia"]')?.click() },
+      { label: 'Probar tema Noche', run: () => document.querySelector('[data-theme-opt="dark"]')?.click() },
+      { label: 'Volver a Claro', run: () => document.querySelector('[data-theme-opt="light"]')?.click() },
+    ],
+  },
+];
+
+const tourState = { active: false, idx: 0 };
+
+function positionTourElements(step) {
+  const spot = $('tourSpotlight');
+  const card = $('tourCard');
+  if (!spot || !card) return;
+
+  const targetEl = step.selector ? document.querySelector(step.selector) : null;
+  const rect = targetEl ? targetEl.getBoundingClientRect() : null;
+  const visible = rect && rect.width > 0 && rect.height > 0;
+
+  if (!visible) {
+    spot.classList.add('centered');
+    card.style.left = `${Math.max(14, Math.round((window.innerWidth - card.offsetWidth) / 2))}px`;
+    card.style.top = `${Math.max(14, Math.round((window.innerHeight - card.offsetHeight) / 2))}px`;
+    return;
+  }
+
+  targetEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+  const r = targetEl.getBoundingClientRect();
+  const pad = 7;
+  spot.classList.remove('centered');
+  spot.style.top = `${Math.max(4, r.top - pad)}px`;
+  spot.style.left = `${Math.max(4, r.left - pad)}px`;
+  spot.style.width = `${r.width + pad * 2}px`;
+  spot.style.height = `${r.height + pad * 2}px`;
+
+  const cw = card.offsetWidth || 410;
+  const ch = card.offsetHeight || 280;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const gap = 16;
+
+  let left = r.left;
+  let top = r.bottom + gap;
+
+  // Prefer placing beside tall left/right rails, or below/above topbar buttons
+  if (r.right + gap + cw < vw - 12 && r.height > 120) {
+    left = r.right + gap;
+    top = Math.max(16, Math.min(vh - ch - 16, r.top));
+  } else if (r.left - gap - cw > 12 && r.height > 120) {
+    left = r.left - gap - cw;
+    top = Math.max(16, Math.min(vh - ch - 16, r.top));
+  } else {
+    if (top + ch > vh - 14) {
+      top = Math.max(14, r.top - ch - gap);
+    }
+    left = Math.max(14, Math.min(vw - cw - 14, r.left + r.width / 2 - cw / 2));
+  }
+
+  card.style.left = `${Math.round(left)}px`;
+  card.style.top = `${Math.round(top)}px`;
+}
+
+function renderTourStep(idx) {
+  const total = DESKTOP_TOUR_STEPS.length;
+  tourState.idx = Math.max(0, Math.min(total - 1, idx));
+  const step = DESKTOP_TOUR_STEPS[tourState.idx];
+
+  $('tourStepBadge').textContent = `Paso ${tourState.idx + 1} de ${total}`;
+  $('tourTitle').textContent = step.title;
+  $('tourBody').textContent = step.body;
+
+  const extra = $('tourExtra');
+  extra.innerHTML = '';
+
+  if (Array.isArray(step.tips) && step.tips.length) {
+    const ul = document.createElement('ul');
+    ul.className = 'tour-tip-list';
+    for (const t of step.tips) {
+      const li = document.createElement('li');
+      li.textContent = t;
+      ul.appendChild(li);
+    }
+    extra.appendChild(ul);
+  }
+
+  if (Array.isArray(step.shortcuts) && step.shortcuts.length) {
+    const grid = document.createElement('div');
+    grid.className = 'tour-kbd-grid';
+    for (const [k, desc] of step.shortcuts) {
+      const item = document.createElement('div');
+      item.className = 'tour-kbd-item';
+      item.innerHTML = `<kbd>${escapeHtml(k)}</kbd><span>${escapeHtml(desc)}</span>`;
+      grid.appendChild(item);
+    }
+    extra.appendChild(grid);
+  }
+
+  if (Array.isArray(step.actions) && step.actions.length) {
+    const row = document.createElement('div');
+    row.className = 'tour-action-row';
+    for (const act of step.actions) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn-xs btn-subtle';
+      b.textContent = act.label;
+      b.addEventListener('click', act.run);
+      row.appendChild(b);
+    }
+    extra.appendChild(row);
+  }
+
+  const dots = $('tourDots');
+  dots.innerHTML = '';
+  for (let i = 0; i < total; i++) {
+    const d = document.createElement('button');
+    d.type = 'button';
+    d.className = `tour-dot${i === tourState.idx ? ' active' : ''}`;
+    d.setAttribute('aria-label', `Ir al paso ${i + 1}`);
+    d.addEventListener('click', () => renderTourStep(i));
+    dots.appendChild(d);
+  }
+
+  $('tourPrevBtn').disabled = tourState.idx === 0;
+  $('tourNextBtn').textContent = tourState.idx === total - 1 ? '¡Empezar a estudiar! ✓' : 'Siguiente →';
+
+  requestAnimationFrame(() => positionTourElements(step));
+}
+
+function openInteractiveTour(startIdx = 0) {
+  const ov = $('tourOverlay');
+  if (!ov) return;
+  // Ensure side rails are visible so spotlight targets exist on screen
+  $('appShell')?.classList.remove('left-collapsed', 'right-collapsed');
+  tourState.active = true;
+  ov.hidden = false;
+  ov.setAttribute('aria-hidden', 'false');
+  renderTourStep(startIdx);
+}
+
+function closeInteractiveTour() {
+  const ov = $('tourOverlay');
+  if (!ov) return;
+  tourState.active = false;
+  ov.hidden = true;
+  ov.setAttribute('aria-hidden', 'true');
+  try { localStorage.setItem(TOUR_STORAGE_KEY, '1'); } catch {}
+}
+
+$('openTourBtn')?.addEventListener('click', () => openInteractiveTour(0));
+$('tourCloseBtn')?.addEventListener('click', closeInteractiveTour);
+$('tourSkipBtn')?.addEventListener('click', closeInteractiveTour);
+$('tourPrevBtn')?.addEventListener('click', () => renderTourStep(tourState.idx - 1));
+$('tourNextBtn')?.addEventListener('click', () => {
+  if (tourState.idx >= DESKTOP_TOUR_STEPS.length - 1) closeInteractiveTour();
+  else renderTourStep(tourState.idx + 1);
+});
+window.addEventListener('resize', () => {
+  if (tourState.active) positionTourElements(DESKTOP_TOUR_STEPS[tourState.idx]);
+});
+window.addEventListener('keydown', (ev) => {
+  if (!tourState.active) return;
+  if (ev.key === 'Escape') {
+    ev.preventDefault();
+    closeInteractiveTour();
+  } else if (ev.key === 'ArrowRight') {
+    ev.preventDefault();
+    if (tourState.idx < DESKTOP_TOUR_STEPS.length - 1) renderTourStep(tourState.idx + 1);
+  } else if (ev.key === 'ArrowLeft') {
+    ev.preventDefault();
+    if (tourState.idx > 0) renderTourStep(tourState.idx - 1);
+  }
+});
+
 // ---------------- Boot ----------------
 async function init() {
   const res = await fetch('/api/config');
@@ -3945,12 +4211,17 @@ async function init() {
   } catch {}
   applyEngineUi(preferredEngine);
 
-  // First-launch zero-terminal auto-setup: if no local model is ready yet and no Gemini key is saved,
-  // guide the user to install Ollama + the RAM-optimal free local model in 1 click!
+  // First-launch zero-terminal auto-setup OR interactive welcome tour on first visit!
   let dismissedThisSession = false;
-  try { dismissedThisSession = sessionStorage.getItem('sap-bootstrap-dismissed') === '1'; } catch {}
+  let tourSeen = false;
+  try {
+    dismissedThisSession = sessionStorage.getItem('sap-bootstrap-dismissed') === '1';
+    tourSeen = localStorage.getItem(TOUR_STORAGE_KEY) === '1';
+  } catch {}
   if (cfg.localSetup?.needsBootstrap && !cfg.hasApiKey && !dismissedThisSession) {
     openLocalBootstrapModal();
+  } else if (!tourSeen) {
+    setTimeout(() => openInteractiveTour(0), 450);
   }
 }
 
