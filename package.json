@@ -49,6 +49,7 @@
     "appId": "com.pedroroig.speakingaiprofessor",
     "productName": "Speaking AI Professor",
     "copyright": "Copyright © 2026 Pedro Roig",
+    "publish": null,
     "directories": {
       "buildResources": "build",
       "output": "dist"

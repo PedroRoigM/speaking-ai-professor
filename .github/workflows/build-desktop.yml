@@ -19,13 +19,13 @@ jobs:
         include:
           - os_label: macOS Apple Silicon + Intel (.dmg)
             runner: macos-15
-            build_cmd: npx electron-builder --mac --arm64 --x64
+            build_cmd: npx electron-builder --mac --arm64 --x64 --publish never
           - os_label: Windows (.exe Setup + Portable)
             runner: windows-latest
-            build_cmd: npx electron-builder --win --x64
+            build_cmd: npx electron-builder --win --x64 --publish never
           - os_label: Linux (.AppImage)
             runner: ubuntu-latest
-            build_cmd: npx electron-builder --linux --x64
+            build_cmd: npx electron-builder --linux --x64 --publish never
 
     steps:
       - name: Checkout repository

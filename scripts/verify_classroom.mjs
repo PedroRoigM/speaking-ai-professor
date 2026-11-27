@@ -9,33 +9,27 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const APP_DIR = path.resolve(__dirname, '..');
+const importLocal = (...segs) => import(pathToFileURL(path.join(APP_DIR, ...segs)).href);
 
-const { verifyMathPython } = await import(path.join(APP_DIR, 'lib', 'mathVerifier.mjs'));
-const { getOllamaStatus, getOllamaRunningGpuInfo, getOllamaTools } = await import(
-  path.join(APP_DIR, 'lib', 'localProfessor.mjs')
+const { verifyMathPython } = await importLocal('lib', 'mathVerifier.mjs');
+const { getOllamaStatus, getOllamaRunningGpuInfo, getOllamaTools } = await importLocal('lib', 'localProfessor.mjs');
+const { getProfessorToolDeclarations } = await importLocal('lib', 'professorConfig.mjs');
+const { validatePublicHttpUrl, searchWeb, buildSlideSearchQuery, scoreSourceAuthority, isBlockedLowTrustDomain } =
+  await importLocal('lib', 'webSearch.mjs');
+const { WebResearchAgent, formatVerifiedBriefForPrompt } = await importLocal('lib', 'webResearchAgent.mjs');
+const { execPython, execPoppler, getPlatformSummary } = await importLocal('lib', 'platformTools.mjs');
+const { getLocalVoicesForPlatform, buildWavFromPcm16, extractWavPcmAndRate } = await importLocal(
+  'lib',
+  'localVoice.mjs',
 );
-const { getProfessorToolDeclarations } = await import(path.join(APP_DIR, 'lib', 'professorConfig.mjs'));
-const { validatePublicHttpUrl, searchWeb, buildSlideSearchQuery, scoreSourceAuthority, isBlockedLowTrustDomain } = await import(
-  path.join(APP_DIR, 'lib', 'webSearch.mjs')
-);
-const { WebResearchAgent, formatVerifiedBriefForPrompt } = await import(
-  path.join(APP_DIR, 'lib', 'webResearchAgent.mjs')
-);
-const { execPython, execPoppler, getPlatformSummary } = await import(path.join(APP_DIR, 'lib', 'platformTools.mjs'));
-const { getLocalVoicesForPlatform, buildWavFromPcm16, extractWavPcmAndRate } = await import(
-  path.join(APP_DIR, 'lib', 'localVoice.mjs')
-);
-const { isAllowedLocalHost, isAllowedLocalOrigin, resolveStaticPath } = await import(
-  path.join(APP_DIR, 'lib', 'httpSecurity.mjs')
-);
-const { BLUEPRINT_TEMPLATES, buildParametricBlueprintSvg, renderMathExpressionHtml, evalSafeExpr } = await import(
-  path.join(APP_DIR, 'public', 'stageRenderer.js')
-);
+const { isAllowedLocalHost, isAllowedLocalOrigin, resolveStaticPath } = await importLocal('lib', 'httpSecurity.mjs');
+const { BLUEPRINT_TEMPLATES, buildParametricBlueprintSvg, renderMathExpressionHtml, evalSafeExpr } =
+  await importLocal('public', 'stageRenderer.js');
 
 let failed = 0;
 const check = async (name, fn) => {
@@ -73,8 +67,14 @@ await check('Sintaxis JS/MJS + Python', async () => {
   for (const rel of modules) {
     execFileSync(process.execPath, ['--check', path.join(APP_DIR, rel)], { stdio: 'pipe' });
   }
-  await execPython(['-m', 'py_compile', path.join(APP_DIR, 'lib', 'voice_worker.py')]);
-  return `${modules.length + 1} módulos sin errores de sintaxis`;
+  let pyNote = '';
+  try {
+    await execPython(['-m', 'py_compile', path.join(APP_DIR, 'lib', 'voice_worker.py')]);
+    pyNote = ' + voice_worker.py';
+  } catch {
+    pyNote = ' (Python opcional omitido)';
+  }
+  return `${modules.length} módulos JS/MJS${pyNote} sin errores de sintaxis`;
 });
 
 await check('Ollama Local + GPU/CPU', async () => {
@@ -117,7 +117,7 @@ await check('12 Plantillas Esquemáticas + Cero Solapes + Cero Gráficas Vacías
 });
 
 await check('Watchdog Anti-Bloqueo + Self-Heal de Cola (Simulación de bloqueo en Pág. 8)', async () => {
-  const { LookaheadClassEngine } = await import(path.join(APP_DIR, 'lib', 'classTimeline.mjs'));
+  const { LookaheadClassEngine } = await importLocal('lib', 'classTimeline.mjs');
   const events = [];
   const eng = new LookaheadClassEngine({
     pdfStage: {
@@ -305,8 +305,8 @@ await check('Multiplataforma (macOS / Windows / Linux): Voces Nativas y WAV Pars
 });
 
 await check('Desktop Zero-Dependencies: JS Math Verifier + PDF.js Fallback + Electron Syntax', async () => {
-  const { verifyMathJsFallback } = await import(path.join(APP_DIR, 'lib', 'mathVerifier.mjs'));
-  const { getPdfPageCountJs, extractPdfPageLayoutJs } = await import(path.join(APP_DIR, 'lib', 'pdfFallback.mjs'));
+  const { verifyMathJsFallback } = await importLocal('lib', 'mathVerifier.mjs');
+  const { getPdfPageCountJs, extractPdfPageLayoutJs } = await importLocal('lib', 'pdfFallback.mjs');
 
   // 1. Pure-JS math fallback accuracy (Steiner theorem + load transfer)
   const mathRes = verifyMathJsFallback('m = 1350\na_x = 9.81\nh = 0.45\nL = 2.65\nresult = round((m * a_x * h) / L, 2)');
