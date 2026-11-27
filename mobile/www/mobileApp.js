@@ -69,19 +69,63 @@ const state = {
 
 // ---------------- Toast & UI Helpers ----------------
 let toastTimer = null;
-function showToast(msg, ms = 3200) {
+function showToast(msg, ms = 3400, { isError = false } = {}) {
   const el = $('toastEl');
   el.textContent = msg;
+  el.classList.toggle('toast-error', Boolean(isError));
   el.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     el.hidden = true;
-  }, ms);
+  }, isError ? Math.max(ms, 6200) : ms);
 }
 
-function setCaption(role, text) {
-  $('captionRole').textContent = role;
-  $('captionText').textContent = text;
+let mobileThinkingTimer = null;
+let mobileThinkingStart = 0;
+
+function stopMobileThinkingTimer() {
+  clearInterval(mobileThinkingTimer);
+  mobileThinkingTimer = null;
+}
+
+function setCaption(role, text, { visualState = 'normal' } = {}) {
+  stopMobileThinkingTimer();
+  const bar = $('captionBar');
+  const roleEl = $('captionRole');
+  const txtEl = $('captionText');
+  if (bar) bar.dataset.state = visualState;
+  roleEl.textContent = role;
+
+  if (visualState === 'thinking') {
+    mobileThinkingStart = Date.now();
+    const render = () => {
+      const secs = Math.max(0, Math.floor((Date.now() - mobileThinkingStart) / 1000));
+      txtEl.innerHTML = '';
+      const span = document.createElement('span');
+      span.textContent = `${text} (${secs}s)`;
+      const dots = document.createElement('span');
+      dots.className = 'm-dots';
+      dots.innerHTML = '<span></span><span></span><span></span>';
+      txtEl.appendChild(span);
+      txtEl.appendChild(dots);
+    };
+    render();
+    mobileThinkingTimer = setInterval(render, 1000);
+    return;
+  }
+
+  txtEl.textContent = text;
+}
+
+function formatMobileError(err) {
+  const raw = String(err?.message || err || 'Error desconocido');
+  const low = raw.toLowerCase();
+  if (raw === 'MISSING_API_KEY') return 'Falta tu API Key gratuita de Google Gemini. Pégala en ⚙ Ajustes.';
+  if (low.includes('401') || low.includes('403')) return 'API Key de Gemini inválida o sin permisos. Revísala en ⚙ Ajustes.';
+  if (low.includes('429') || low.includes('quota')) return 'Límite temporal alcanzado en Gemini Cloud. Espera unos segundos o cambia a 3.5 Flash-Lite en ⚙.';
+  if (low.includes('abort') || low.includes('timeout')) return 'Gemini Cloud tardó demasiado en responder. Pulsa Reanudar para reintentar.';
+  if (low.includes('failed to fetch') || low.includes('network')) return 'Sin conexión a internet. Comprueba tu Wi-Fi o datos móviles.';
+  return raw;
 }
 
 function setLiveDot(mode) {
@@ -723,7 +767,7 @@ async function runClassFromPage(startPage) {
     }
 
     setLiveDot('thinking');
-    setCaption('Profesor', `Preparando página ${p} de ${state.totalPages} con Gemini Cloud...`);
+    setCaption('Pensando', `Preparando página ${p}/${state.totalPages} con Gemini Cloud`, { visualState: 'thinking' });
 
     let beats;
     try {
@@ -731,13 +775,12 @@ async function runClassFromPage(startPage) {
     } catch (err) {
       if (myGen !== state.generationId) return;
       setLiveDot('idle');
+      const friendly = formatMobileError(err);
       if (err.message === 'MISSING_API_KEY') {
         openSettingsModal();
-        showToast('Configura tu API Key de Gemini Cloud');
-      } else {
-        showToast(`Error en Gemini Cloud: ${err.message}`);
-        setCaption('Error', err.message);
       }
+      showToast(`⚠️ ${friendly}`, 6500, { isError: true });
+      setCaption('⚠️ Error', friendly, { visualState: 'error' });
       state.playing = false;
       state.paused = true;
       setKeepScreenOn(false);
@@ -827,8 +870,8 @@ async function askProfessorQuestion(question) {
     return;
   }
 
-  setCaption('Tú', q);
   setLiveDot('thinking');
+  setCaption('Pensando', `Analizando tu pregunta: "${q.slice(0, 60)}"`, { visualState: 'thinking' });
 
   const isEn = state.settings.language === 'en';
   const qaSys = isEn
@@ -854,8 +897,9 @@ async function askProfessorQuestion(question) {
     await speakText(answer);
   } catch (err) {
     setLiveDot('idle');
-    showToast(`No se pudo responder: ${err.message}`);
-    setCaption('Error', err.message);
+    const friendly = formatMobileError(err);
+    showToast(`⚠️ ${friendly}`, 6500, { isError: true });
+    setCaption('⚠️ Error', friendly, { visualState: 'error' });
   }
 }
 

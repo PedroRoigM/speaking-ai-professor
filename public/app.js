@@ -346,7 +346,263 @@ function renderWebSourcesList() {
   }
 }
 
-// ---------------- Utilities ----------------
+// ---------------- Utilities & Live User Feedback (Thinking Dots + High-Visibility Errors) ----------------
+const thinkingFeedback = {
+  el: null,
+  labelEl: null,
+  elapsedEl: null,
+  startedAt: 0,
+  timer: null,
+};
+
+function showThinkingBubble(label = 'Pensando respuesta...') {
+  const list = $('transcriptList');
+  const sendBtn = $('sendTextBtn');
+  if (sendBtn) sendBtn.classList.add('is-busy');
+
+  const fsCap = $('fsCaptionText');
+  if (fsCap && state.classState.active) {
+    fsCap.textContent = `${label} •••`;
+  }
+
+  if (!list) return;
+  if (thinkingFeedback.el && thinkingFeedback.el.isConnected) {
+    if (thinkingFeedback.labelEl && label) thinkingFeedback.labelEl.textContent = label;
+    list.appendChild(thinkingFeedback.el);
+    list.scrollTop = list.scrollHeight;
+    return;
+  }
+
+  const el = document.createElement('div');
+  el.className = 'msg professor thinking-bubble';
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
+
+  const roleLabel = document.createElement('div');
+  roleLabel.className = 'msg-role';
+  roleLabel.textContent = 'Profesor';
+
+  const row = document.createElement('div');
+  row.className = 'thinking-row';
+
+  const dots = document.createElement('span');
+  dots.className = 'typing-dots';
+  dots.setAttribute('aria-hidden', 'true');
+  dots.innerHTML = '<span></span><span></span><span></span>';
+
+  const labelEl = document.createElement('span');
+  labelEl.textContent = label || 'Pensando...';
+
+  const elapsedEl = document.createElement('span');
+  elapsedEl.className = 'thinking-elapsed';
+  elapsedEl.textContent = '0s';
+
+  row.appendChild(dots);
+  row.appendChild(labelEl);
+  row.appendChild(elapsedEl);
+  el.appendChild(roleLabel);
+  el.appendChild(row);
+  list.appendChild(el);
+  list.scrollTop = list.scrollHeight;
+
+  thinkingFeedback.el = el;
+  thinkingFeedback.labelEl = labelEl;
+  thinkingFeedback.elapsedEl = elapsedEl;
+  thinkingFeedback.startedAt = Date.now();
+  clearInterval(thinkingFeedback.timer);
+  thinkingFeedback.timer = setInterval(() => {
+    if (!thinkingFeedback.elapsedEl) return;
+    const secs = Math.max(0, Math.floor((Date.now() - thinkingFeedback.startedAt) / 1000));
+    thinkingFeedback.elapsedEl.textContent = `${secs}s`;
+  }, 1000);
+}
+
+function hideThinkingBubble() {
+  clearInterval(thinkingFeedback.timer);
+  thinkingFeedback.timer = null;
+  if (thinkingFeedback.el && thinkingFeedback.el.parentNode) {
+    thinkingFeedback.el.parentNode.removeChild(thinkingFeedback.el);
+  }
+  thinkingFeedback.el = null;
+  thinkingFeedback.labelEl = null;
+  thinkingFeedback.elapsedEl = null;
+  $('sendTextBtn')?.classList.remove('is-busy');
+}
+
+function formatFriendlyError(rawMessage, code = '') {
+  const msg = String(rawMessage || 'Ha ocurrido un error inesperado.').trim();
+  const low = msg.toLowerCase();
+  if (code === 'NO_API_KEY' || low.includes('no gemini_api_key')) {
+    return {
+      title: 'Falta tu clave de Gemini API',
+      detail: 'Introduce tu API Key gratuita de Google AI Studio o cambia al modo Local Gratis ($0) con Ollama.',
+      kind: 'apikey',
+    };
+  }
+  if (low.includes('401') || low.includes('403') || low.includes('api_key_invalid') || low.includes('api key not valid')) {
+    return {
+      title: 'API Key de Gemini inválida o sin permisos',
+      detail: 'Revisa que hayas copiado la clave completa desde Google AI Studio o cambia al modo Local ($0).',
+      kind: 'apikey',
+    };
+  }
+  if (low.includes('429') || low.includes('quota') || low.includes('resource_exhausted')) {
+    return {
+      title: 'Límite temporal de Gemini Cloud alcanzado',
+      detail: 'Espera unos segundos, cambia a Gemini 3.5 Flash-Lite en Ajustes o usa el modo Local Gratis ($0).',
+      kind: 'settings',
+    };
+  }
+  if (low.includes('11434') || low.includes('ollama') || low.includes('econnrefused')) {
+    return {
+      title: 'Ollama local no está activo o sin modelo',
+      detail: 'Pulsa «Instalar / iniciar Ollama ($0)» para arrancarlo automáticamente, o cambia a Gemini Cloud.',
+      kind: 'ollama',
+    };
+  }
+  if (low.includes('abort') || low.includes('timeout') || low.includes('timed out')) {
+    return {
+      title: 'La IA tardó demasiado en responder',
+      detail: 'Se superó el tiempo de espera. Puedes reintentar o elegir un modelo más ligero en Ajustes.',
+      kind: 'settings',
+    };
+  }
+  return {
+    title: 'Algo ha fallado',
+    detail: msg,
+    kind: 'general',
+  };
+}
+
+function showUiToast({ title = 'Aviso', message = '', variant = 'error', actions = [], durationMs = 7500 } = {}) {
+  const stack = $('uiToastStack');
+  if (!stack) return;
+  const toast = document.createElement('div');
+  toast.className = `ui-toast toast-${variant}`;
+
+  const icon = document.createElement('span');
+  icon.className = 'ui-toast-icon';
+  icon.textContent = variant === 'error' ? '⚠️' : variant === 'warn' ? '⚡' : 'ℹ️';
+
+  const content = document.createElement('div');
+  content.className = 'ui-toast-content';
+
+  const tEl = document.createElement('div');
+  tEl.className = 'ui-toast-title';
+  tEl.textContent = title;
+
+  const mEl = document.createElement('div');
+  mEl.className = 'ui-toast-msg';
+  mEl.textContent = message;
+
+  content.appendChild(tEl);
+  content.appendChild(mEl);
+
+  if (Array.isArray(actions) && actions.length) {
+    const actRow = document.createElement('div');
+    actRow.className = 'ui-toast-actions';
+    for (const a of actions) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn-xs btn-subtle';
+      b.textContent = a.label;
+      b.addEventListener('click', () => {
+        toast.remove();
+        a.run?.();
+      });
+      actRow.appendChild(b);
+    }
+    content.appendChild(actRow);
+  }
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'ui-toast-close';
+  closeBtn.setAttribute('aria-label', 'Cerrar aviso');
+  closeBtn.textContent = '✕';
+  closeBtn.addEventListener('click', () => toast.remove());
+
+  toast.appendChild(icon);
+  toast.appendChild(content);
+  toast.appendChild(closeBtn);
+  stack.appendChild(toast);
+
+  if (stack.children.length > 3) {
+    stack.firstElementChild?.remove();
+  }
+  if (durationMs > 0) {
+    setTimeout(() => toast.remove(), durationMs);
+  }
+}
+
+function showErrorFeedback(rawMessage, { code = '' } = {}) {
+  hideThinkingBubble();
+  const parsed = formatFriendlyError(rawMessage, code);
+  const list = $('transcriptList');
+
+  const actions = [];
+  if (parsed.kind === 'apikey') {
+    actions.push({ label: 'Configurar API Key', run: () => openApiKeyModal() });
+    actions.push({ label: 'Usar IA Local ($0)', run: () => openLocalBootstrapModal() });
+  } else if (parsed.kind === 'ollama') {
+    actions.push({ label: 'Instalar / iniciar Ollama ($0)', run: () => openLocalBootstrapModal() });
+    actions.push({ label: 'Cambiar a Gemini Cloud', run: () => { applyEngineUi('gemini'); openApiKeyModal(); } });
+  } else {
+    actions.push({ label: 'Abrir Ajustes', run: () => $('openSettingsBtn')?.click() });
+    if (state.classState.active) {
+      actions.push({ label: '✓ Verificar aula', run: () => $('verifyClassBtn')?.click() });
+    }
+  }
+
+  if (list) {
+    state.currentUserBubble = null;
+    state.currentProfBubble = null;
+    const card = document.createElement('div');
+    card.className = 'msg error-card';
+    card.setAttribute('role', 'alert');
+
+    const head = document.createElement('div');
+    head.className = 'error-card-head';
+    head.textContent = `⚠️ ${parsed.title}`;
+
+    const body = document.createElement('div');
+    body.className = 'error-card-body';
+    body.textContent = parsed.detail;
+
+    card.appendChild(head);
+    card.appendChild(body);
+
+    if (actions.length) {
+      const actRow = document.createElement('div');
+      actRow.className = 'error-card-actions';
+      for (const a of actions) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn btn-xs btn-subtle';
+        b.textContent = a.label;
+        b.addEventListener('click', a.run);
+        actRow.appendChild(b);
+      }
+      card.appendChild(actRow);
+    }
+
+    list.appendChild(card);
+    list.scrollTop = list.scrollHeight;
+    state.transcript.push({ role: 'system', text: `ERROR: ${parsed.title} — ${parsed.detail}`, ts: new Date().toLocaleTimeString() });
+  }
+
+  const fsCap = $('fsCaptionText');
+  if (fsCap) fsCap.textContent = `⚠️ ${parsed.title}: ${parsed.detail}`;
+
+  showUiToast({
+    title: parsed.title,
+    message: parsed.detail,
+    variant: 'error',
+    actions,
+    durationMs: 9000,
+  });
+}
+
 function setStatus(visualState, text) {
   $('statusPill').dataset.state = visualState;
   $('statusText').textContent = text;
@@ -356,6 +612,12 @@ function setStatus(visualState, text) {
   $('voiceStateText').textContent = text;
   const fsDot = $('fsVoiceDot');
   if (fsDot) fsDot.dataset.state = visualState;
+
+  if (visualState === 'thinking' || visualState === 'connecting') {
+    showThinkingBubble(text || 'Pensando...');
+  } else if (visualState === 'speaking' || visualState === 'connected' || visualState === 'idle' || visualState === 'error') {
+    hideThinkingBubble();
+  }
 }
 
 function arrayBufferToBase64(buffer) {
@@ -2357,6 +2619,7 @@ function appendTranscript(role, text, appendToCurrent = false) {
 
   if (role === 'user') state.currentProfBubble = null;
   if (role === 'professor') {
+    hideThinkingBubble();
     state.currentUserBubble = null;
     const fsCap = $('fsCaptionText');
     if (fsCap && text.trim()) fsCap.textContent = text.trim();
@@ -2533,6 +2796,7 @@ async function connectSession({ requestMic = false } = {}) {
         setStatus('connected', 'Listening — ask anything');
       }
     } else if (msg.type === 'turn_complete') {
+      hideThinkingBubble();
       state.currentUserBubble = null;
       state.currentProfBubble = null;
       state.turnFinishedWaitingAudio = true;
@@ -2551,18 +2815,34 @@ async function connectSession({ requestMic = false } = {}) {
     } else if (msg.type === 'web_sources') {
       addWebSourcesEntry(msg.entry);
     } else if (msg.type === 'tool_status') {
-      appendTranscript('system', msg.label);
+      showThinkingBubble(msg.label || 'Procesando herramienta...');
     } else if (msg.type === 'error') {
       setStatus('error', 'Error');
-      appendTranscript('system', `Error: ${msg.message}`);
+      showErrorFeedback(msg.message, { code: msg.code });
       if (msg.code === 'NO_API_KEY') openApiKeyModal();
     } else if (msg.type === 'session_closed') {
+      hideThinkingBubble();
       disconnectSession(msg.reason || 'Class ended');
     }
   };
 
-  state.ws.onclose = () => {
-    if (state.connected) disconnectSession('Disconnected');
+  state.ws.onerror = () => {
+    showErrorFeedback('No se pudo comunicar con el servidor local del aula. Comprueba si la app sigue abierta o reintenta conectar.');
+  };
+
+  state.ws.onclose = (ev) => {
+    hideThinkingBubble();
+    if (state.connected) {
+      if (!ev?.wasClean) {
+        showUiToast({
+          title: 'Conexión interrumpida',
+          message: 'Se cerró la conexión con el profesor. Pulsa «Conectar» o «Empezar clase» para continuar.',
+          variant: 'warn',
+          durationMs: 6500,
+        });
+      }
+      disconnectSession('Desconectado');
+    }
   };
 }
 
@@ -3121,6 +3401,7 @@ async function sendPromptText(txt) {
     flushPlaybackQueue();
   }
   appendTranscript('user', txt, false);
+  showThinkingBubble('Pensando respuesta...');
   state.ws.send(JSON.stringify({ type: 'text', text: txt, alreadyLogged: true }));
 }
 
