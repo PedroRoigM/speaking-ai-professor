@@ -77,20 +77,27 @@ function parseArgs(argv) {
 
 const cli = parseArgs(process.argv.slice(2));
 const EXAMPLES_DIR = path.join(__dirname, 'examples');
-async function resolveDefaultTargetDir() {
+const PDFJS_BUILD_DIR = path.join(__dirname, 'node_modules', 'pdfjs-dist', 'build');
+
+async function resolveDefaultTargetDir(overrideDir = '') {
+  if (overrideDir) return path.resolve(overrideDir);
   if (cli.dir) return path.resolve(cli.dir);
   if (process.env.TARGET_DIR) return path.resolve(process.env.TARGET_DIR);
   const cwd = path.resolve(process.cwd());
-  if (cwd !== __dirname) return cwd;
-  try {
-    await fs.access(EXAMPLES_DIR);
-    return EXAMPLES_DIR;
-  } catch {
-    return __dirname;
+  if (cwd !== __dirname && !cwd.includes('.asar')) return cwd;
+  // When packaged inside Electron (.asar), unpacked examples live in app.asar.unpacked/examples
+  const unpackedExamples = EXAMPLES_DIR.replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked');
+  for (const candidate of [unpackedExamples, EXAMPLES_DIR]) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {}
   }
+  return os.homedir();
 }
-let TARGET_DIR = await resolveDefaultTargetDir();
+let TARGET_DIR = '';
 let PORT = cli.port || Number(process.env.PORT || 3456);
+let customPickFolderHandler = null;
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -199,24 +206,26 @@ async function initLibraryFor(dirPath) {
 }
 
 const voiceEngine = new LocalVoiceEngine({ appDir: __dirname });
+let voiceCaps = { kokoro: false, whisper: false };
+let initialOllama = { running: false, models: [] };
+let initialGpuPs = [];
+let serverInitialized = false;
 
-await loadAllEnv();
-await initLibraryFor(TARGET_DIR);
-const voiceCaps = await voiceEngine.init();
-if (voiceCaps.kokoro) {
-  // Pre-compile Kokoro MLX Metal GPU shaders asynchronously on boot so the 1st sentence has zero cold-start delay!
-  voiceEngine.warmup();
+async function initializeServerState({ dir = '', port = 0, pickFolderNative = null } = {}) {
+  if (serverInitialized) return;
+  customPickFolderHandler = typeof pickFolderNative === 'function' ? pickFolderNative : null;
+  await loadAllEnv();
+  if (port) PORT = Number(port);
+  TARGET_DIR = await resolveDefaultTargetDir(dir);
+  await initLibraryFor(TARGET_DIR);
+  voiceCaps = await voiceEngine.init();
+  if (voiceCaps.kokoro) {
+    // Pre-compile Kokoro MLX Metal GPU shaders asynchronously on boot so the 1st sentence has zero cold-start delay!
+    voiceEngine.warmup();
+  }
+  [initialOllama, initialGpuPs] = await Promise.all([getOllamaStatus(), getOllamaRunningGpuInfo()]);
+  serverInitialized = true;
 }
-const [initialOllama, initialGpuPs] = await Promise.all([getOllamaStatus(), getOllamaRunningGpuInfo()]);
-
-process.on('SIGINT', () => {
-  voiceEngine.shutdown();
-  process.exit(0);
-});
-process.on('SIGTERM', () => {
-  voiceEngine.shutdown();
-  process.exit(0);
-});
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -292,6 +301,30 @@ const server = http.createServer(async (req, res) => {
       return res.end(data);
     }
 
+    if (req.method === 'GET' && pathname === '/api/pdf/raw') {
+      const docId = url.searchParams.get('id') || '';
+      const doc = pdfStage.resolvePdfDoc(docId);
+      if (!doc) return sendJson(res, 404, { error: 'PDF not found' });
+      const data = await fs.readFile(doc.fullPath);
+      res.writeHead(200, {
+        ...SECURITY_HEADERS,
+        'Content-Type': 'application/pdf',
+        'Cache-Control': 'public, max-age=3600',
+      });
+      return res.end(data);
+    }
+
+    if (req.method === 'GET' && (pathname === '/vendor/pdfjs/pdf.min.mjs' || pathname === '/vendor/pdfjs/pdf.worker.min.mjs')) {
+      const filename = path.basename(pathname);
+      const data = await fs.readFile(path.join(PDFJS_BUILD_DIR, filename));
+      res.writeHead(200, {
+        ...SECURITY_HEADERS,
+        'Content-Type': 'text/javascript; charset=utf-8',
+        'Cache-Control': 'public, max-age=86400',
+      });
+      return res.end(data);
+    }
+
     if (req.method === 'GET' && pathname === '/api/pdf/page-info') {
       const docId = url.searchParams.get('id') || '';
       const page = Number(url.searchParams.get('page') || 1);
@@ -306,6 +339,8 @@ const server = http.createServer(async (req, res) => {
         vbW: bundle.vbW,
         vbH: bundle.vbH,
         imageUrl: bundle.imageUrl,
+        pdfUrl: bundle.pdfUrl,
+        clientPdfFallback: Boolean(bundle.clientPdfFallback),
         hasExampleProblem: bundle.hasExampleProblem,
       });
     }
@@ -359,7 +394,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && pathname === '/api/folder/pick') {
-      const picked = await pickNativeFolderDialog(library.workspaceRoot || TARGET_DIR);
+      const startDir = library.workspaceRoot || TARGET_DIR;
+      const picked = customPickFolderHandler
+        ? await customPickFolderHandler(startDir)
+        : await pickNativeFolderDialog(startDir);
       if (!picked.ok) {
         return sendJson(res, 200, {
           ok: false,
@@ -683,7 +721,9 @@ wss.on('connection', (clientWs) => {
               name: res.filename,
               page: res.page,
               totalPages: res.totalPages,
-              imageUrl: `/api/pdf/page-image?id=${encodeURIComponent(res.docId)}&page=${res.page}`,
+              imageUrl: res.imageUrl ?? `/api/pdf/page-image?id=${encodeURIComponent(res.docId)}&page=${res.page}`,
+              pdfUrl: res.pdfUrl || `/api/pdf/raw?id=${encodeURIComponent(res.docId)}`,
+              clientPdfFallback: Boolean(res.clientPdfFallback),
               vbW: res.vbW,
               vbH: res.vbH,
               hasExampleProblem: res.hasExampleProblem,
@@ -1443,53 +1483,85 @@ wss.on('connection', (clientWs) => {
   });
 });
 
-function listenWithFallback(startPort, maxTries = 15) {
-  let attempt = 0;
-  const tryListen = (p) => {
-    server.once('error', (err) => {
-      if (err.code === 'EADDRINUSE' && attempt < maxTries) {
-        attempt++;
-        tryListen(p + 1);
-      } else {
-        console.error('[Server listen error]', err);
-        process.exit(1);
-      }
-    });
-    server.listen(p, '127.0.0.1', () => {
-      const url = `http://localhost:${p}`;
-      const dp = library.domainProfile;
-      const plat = getPlatformSummary();
-      const loadedGpuStr = initialGpuPs.length
-        ? initialGpuPs.map((m) => `${m.name} (${m.gpuPct}% GPU · ${m.vramGb} GB)`).join(', ')
-        : plat.isAppleSilicon
-          ? 'MLX Metal GPU on demand'
-          : 'Auto GPU/CPU on demand';
-      const nativeTtsLabel =
-        plat.platform === 'win32'
-          ? 'fallback Windows SAPI'
-          : plat.platform === 'linux'
-            ? voiceCaps.linuxEspeak
-              ? 'fallback espeak-ng'
-              : 'install espeak-ng or Kokoro'
-            : 'fallback macOS say';
-      const kokoroLabel = voiceCaps.kokoro
-        ? `READY (${voiceCaps.kokoroBackend || 'neural'})`
-        : nativeTtsLabel;
-      const whisperLabel = voiceCaps.whisper ? `READY (${voiceCaps.whisperBackend || 'local'})` : 'browser STT';
-      console.log(`\n🎓  Speaking AI Professor — Live Classroom Stage (PDF + Precision CAD Board + Local $0)`);
-      console.log(`🌐  URL:      ${url}`);
-      console.log(`📂  Folder:   ${dp?.workspaceRoot || TARGET_DIR}`);
-      console.log(`🧠  Expert:   ${dp?.folderName || path.basename(TARGET_DIR)} (${dp?.activeFiles || 0}/${dp?.totalFiles || 0} study files indexed)`);
-      console.log(`⚡  System:   ${plat.osLabel} (${plat.arch}) · ${plat.cpuBrand} · ${plat.memGb} GB RAM · ${loadedGpuStr} · Disk Cache ON`);
-      console.log(`💻  Local:    Ollama ${initialOllama.running ? `running (${initialOllama.models.map((m) => m.name).join(', ') || 'no models'})` : 'offline'}`);
-      console.log(`🔊  TTS/STT:  Kokoro=${kokoroLabel} · Whisper=${whisperLabel}`);
-      console.log(`☁️   Cloud:    GEMINI_API_KEY ${runtimeApiKey ? 'configured' : 'optional (not needed in Local mode)'}\n`);
-      if (cli.open) {
-        openBrowserUrl(url);
-      }
-    });
-  };
-  tryListen(startPort);
+function listenWithFallback(startPort, { open = false, maxTries = 15 } = {}) {
+  return new Promise((resolve, reject) => {
+    let attempt = 0;
+    const tryListen = (p) => {
+      server.once('error', (err) => {
+        if (err.code === 'EADDRINUSE' && attempt < maxTries) {
+          attempt++;
+          tryListen(p + 1);
+        } else {
+          reject(err);
+        }
+      });
+      server.listen(p, '127.0.0.1', () => {
+        const url = `http://localhost:${p}`;
+        const dp = library.domainProfile;
+        const plat = getPlatformSummary();
+        const loadedGpuStr = initialGpuPs.length
+          ? initialGpuPs.map((m) => `${m.name} (${m.gpuPct}% GPU · ${m.vramGb} GB)`).join(', ')
+          : plat.isAppleSilicon
+            ? 'MLX Metal GPU on demand'
+            : 'Auto GPU/CPU on demand';
+        const nativeTtsLabel =
+          plat.platform === 'win32'
+            ? 'fallback Windows SAPI'
+            : plat.platform === 'linux'
+              ? voiceCaps.linuxEspeak
+                ? 'fallback espeak-ng'
+                : 'install espeak-ng or Kokoro'
+              : 'fallback macOS say';
+        const kokoroLabel = voiceCaps.kokoro
+          ? `READY (${voiceCaps.kokoroBackend || 'neural'})`
+          : nativeTtsLabel;
+        const whisperLabel = voiceCaps.whisper ? `READY (${voiceCaps.whisperBackend || 'local'})` : 'browser STT';
+        console.log(`\n🎓  Speaking AI Professor — Live Classroom Stage (PDF + Precision CAD Board + Local $0)`);
+        console.log(`🌐  URL:      ${url}`);
+        console.log(`📂  Folder:   ${dp?.workspaceRoot || TARGET_DIR}`);
+        console.log(`🧠  Expert:   ${dp?.folderName || path.basename(TARGET_DIR)} (${dp?.activeFiles || 0}/${dp?.totalFiles || 0} study files indexed)`);
+        console.log(`⚡  System:   ${plat.osLabel} (${plat.arch}) · ${plat.cpuBrand} · ${plat.memGb} GB RAM · ${loadedGpuStr} · Disk Cache ON`);
+        console.log(`💻  Local:    Ollama ${initialOllama.running ? `running (${initialOllama.models.map((m) => m.name).join(', ') || 'no models'})` : 'offline'}`);
+        console.log(`🔊  TTS/STT:  Kokoro=${kokoroLabel} · Whisper=${whisperLabel}`);
+        console.log(`☁️   Cloud:    GEMINI_API_KEY ${runtimeApiKey ? 'configured' : 'optional (not needed in Local mode)'}\n`);
+        if (open) {
+          openBrowserUrl(url);
+        }
+        resolve({
+          server,
+          port: p,
+          url,
+          close: async () => {
+            voiceEngine.shutdown();
+            for (const client of wss.clients) {
+              try { client.close(); } catch {}
+            }
+            await new Promise((r) => server.close(() => r()));
+          },
+        });
+      });
+    };
+    tryListen(startPort);
+  });
 }
 
-listenWithFallback(PORT);
+export async function startServer({ dir = '', port = 0, open = false, pickFolderNative = null } = {}) {
+  await initializeServerState({ dir, port, pickFolderNative });
+  return listenWithFallback(PORT, { open });
+}
+
+const isDirectEntry = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename);
+if (isDirectEntry) {
+  process.on('SIGINT', () => {
+    voiceEngine.shutdown();
+    process.exit(0);
+  });
+  process.on('SIGTERM', () => {
+    voiceEngine.shutdown();
+    process.exit(0);
+  });
+  startServer({ open: cli.open }).catch((err) => {
+    console.error('[Server listen error]', err);
+    process.exit(1);
+  });
+}

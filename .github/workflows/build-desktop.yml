@@ -1,0 +1,80 @@
+name: Build Desktop Installers (macOS · Windows · Linux)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os_label }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os_label: macOS Apple Silicon + Intel (.dmg)
+            runner: macos-15
+            build_cmd: npx electron-builder --mac --arm64 --x64
+          - os_label: Windows (.exe Setup + Portable)
+            runner: windows-latest
+            build_cmd: npx electron-builder --win --x64
+          - os_label: Linux (.AppImage)
+            runner: ubuntu-latest
+            build_cmd: npx electron-builder --linux --x64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run automated verification suite
+        run: npm run verify
+
+      - name: Build desktop installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: ${{ matrix.build_cmd }}
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            dist/*.dmg
+            dist/*.exe
+            dist/*.AppImage
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all installer artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create GitHub Release with installers
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release-assets/*.dmg
+            release-assets/*.exe
+            release-assets/*.AppImage

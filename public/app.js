@@ -1598,6 +1598,52 @@ function updateReplayBtnState() {
   $('replayDrawBtn').disabled = !hasBoardSvg && !hasPdfAnn;
 }
 
+let pdfjsLibPromise = null;
+const pdfjsDocCache = new Map();
+
+async function ensurePdfjsLib() {
+  if (!pdfjsLibPromise) {
+    pdfjsLibPromise = import('/vendor/pdfjs/pdf.min.mjs').then((mod) => {
+      const lib = mod?.getDocument ? mod : mod?.default || mod;
+      if (lib?.GlobalWorkerOptions) {
+        lib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
+      }
+      return lib;
+    });
+  }
+  return pdfjsLibPromise;
+}
+
+async function renderPdfPageOnCanvas(canvasEl, pdfUrl, pageNum) {
+  if (!canvasEl || !pdfUrl) return;
+  try {
+    const pdfjs = await ensurePdfjsLib();
+    let docPromise = pdfjsDocCache.get(pdfUrl);
+    if (!docPromise) {
+      docPromise = pdfjs.getDocument({ url: pdfUrl }).promise;
+      pdfjsDocCache.set(pdfUrl, docPromise);
+      if (pdfjsDocCache.size > 6) {
+        const oldestKey = pdfjsDocCache.keys().next().value;
+        if (oldestKey && oldestKey !== pdfUrl) pdfjsDocCache.delete(oldestKey);
+      }
+    }
+    const pdfDoc = await docPromise;
+    const clampedPage = Math.max(1, Math.min(pdfDoc.numPages || 1, Number(pageNum) || 1));
+    const page = await pdfDoc.getPage(clampedPage);
+    const scale = Math.min(2.4, Math.max(1.75, (window.devicePixelRatio || 1) * 1.4));
+    const viewport = page.getViewport({ scale });
+    canvasEl.width = Math.round(viewport.width);
+    canvasEl.height = Math.round(viewport.height);
+    const ctx = canvasEl.getContext('2d', { alpha: false });
+    if (!ctx) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+    await page.render({ canvasContext: ctx, viewport }).promise;
+  } catch (err) {
+    console.warn('[PDF.js client fallback error]', err);
+  }
+}
+
 function renderPdfStage(pdfData, { animateNewFrom = 0, pacingMs = 0, forceLayout } = {}) {
   state.pdfView = {
     ...pdfData,
@@ -1615,6 +1661,9 @@ function renderPdfStage(pdfData, { animateNewFrom = 0, pacingMs = 0, forceLayout
   const wrap = $('pdfStageMount');
   wrap.innerHTML = '';
 
+  const fallbackPdfUrl = pdfData.pdfUrl || (pdfData.docId ? `/api/pdf/raw?id=${encodeURIComponent(pdfData.docId)}` : '');
+  const useClientCanvas = Boolean(pdfData.clientPdfFallback || !pdfData.imageUrl);
+
   const card = document.createElement('article');
   card.className = 'stage-card pdf-stage-card';
   card.innerHTML = `
@@ -1626,7 +1675,11 @@ function renderPdfStage(pdfData, { animateNewFrom = 0, pacingMs = 0, forceLayout
       <span class="wb-source">${escapeHtml(pdfData.name)}</span>
     </div>
     <div class="pdf-stage-frame" data-doc-id="${escapeHtml(pdfData.docId)}" data-page="${pdfData.page}">
-      <img class="pdf-page-img" src="${escapeHtml(pdfData.imageUrl)}" alt="Página ${pdfData.page} de ${escapeHtml(pdfData.name)}" />
+      ${
+        useClientCanvas
+          ? `<canvas class="pdf-page-img pdf-page-canvas" aria-label="Página ${pdfData.page} de ${escapeHtml(pdfData.name)}"></canvas>`
+          : `<img class="pdf-page-img" src="${escapeHtml(pdfData.imageUrl)}" alt="Página ${pdfData.page} de ${escapeHtml(pdfData.name)}" />`
+      }
       <div class="pdf-overlay-host">${renderPdfAnnotationsSvg(state.pdfView.annotations, pdfData.vbW || 1000, pdfData.vbH || 750, animateNewFrom)}</div>
     </div>
     <div class="pdf-stage-footer">
@@ -1637,6 +1690,22 @@ function renderPdfStage(pdfData, { animateNewFrom = 0, pacingMs = 0, forceLayout
   wrap.appendChild(card);
 
   const frame = card.querySelector('.pdf-stage-frame');
+  if (useClientCanvas) {
+    const canvasEl = frame.querySelector('canvas.pdf-page-canvas');
+    renderPdfPageOnCanvas(canvasEl, fallbackPdfUrl, pdfData.page);
+  } else {
+    const imgEl = frame.querySelector('img.pdf-page-img');
+    if (imgEl && fallbackPdfUrl) {
+      imgEl.addEventListener('error', () => {
+        if (!imgEl.parentNode) return;
+        const canvasEl = document.createElement('canvas');
+        canvasEl.className = 'pdf-page-img pdf-page-canvas';
+        canvasEl.setAttribute('aria-label', imgEl.alt || `Página ${pdfData.page}`);
+        imgEl.replaceWith(canvasEl);
+        renderPdfPageOnCanvas(canvasEl, fallbackPdfUrl, pdfData.page);
+      }, { once: true });
+    }
+  }
   attachInkCanvas(frame, 'pdf');
 
   const overlaySvg = frame.querySelector('.pdf-overlay-svg');

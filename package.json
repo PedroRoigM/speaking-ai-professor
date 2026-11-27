@@ -1,8 +1,9 @@
 {
   "name": "speaking-ai-professor",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
-  "description": "Real-time dual-screen Speaking AI Professor with PDF projection, parametric SVG chalkboard, Python math verification, cognitive-ergonomic UI, and 100% local ($0 Apple Silicon Ollama + Kokoro MLX) or Gemini Live Cloud modes.",
+  "main": "electron/main.mjs",
+  "description": "Real-time dual-screen Speaking AI Professor with PDF projection, parametric SVG chalkboard, Python/JS math verification, web fact-checking, and 100% local ($0 Ollama + native/Kokoro voice) or Gemini Live Cloud modes.",
   "license": "MIT",
   "author": "Pedro Roig <pedro.roig.morera@gmail.com>",
   "homepage": "https://github.com/PedroRoigM/speaking-ai-professor#readme",
@@ -36,11 +37,101 @@
     "setup:all": "node scripts/setup.mjs --all",
     "start": "node server.mjs --open",
     "dev": "node --watch server.mjs",
+    "desktop": "electron .",
+    "dist:mac": "electron-builder --mac",
+    "dist:mac:arm64": "electron-builder --mac --arm64",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux",
     "verify": "node scripts/verify_classroom.mjs",
     "test:gemini": "node scripts/test-connection.mjs"
   },
+  "build": {
+    "appId": "com.pedroroig.speakingaiprofessor",
+    "productName": "Speaking AI Professor",
+    "copyright": "Copyright © 2026 Pedro Roig",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "lib/voice_worker.py",
+      "examples/**"
+    ],
+    "files": [
+      "electron/**/*",
+      "server.mjs",
+      "lib/**/*",
+      "public/**/*",
+      "bin/**/*",
+      "examples/**/*",
+      "build/icon.png",
+      "!dist/**",
+      "!docs/**",
+      "!demo/**",
+      "!.venv/**",
+      "!**/*.mp4"
+    ],
+    "mac": {
+      "category": "public.app-category.education",
+      "icon": "build/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64", "x64"]
+        }
+      ],
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Opcional: Speaking AI Professor utiliza el micrófono únicamente si decides activar la voz para hacer preguntas al profesor."
+      }
+    },
+    "dmg": {
+      "title": "Speaking AI Professor",
+      "artifactName": "Speaking-AI-Professor-${version}-mac-${arch}.${ext}"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Speaking AI Professor",
+      "artifactName": "Speaking-AI-Professor-${version}-Windows-Setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "Speaking-AI-Professor-${version}-Windows-Portable.${ext}"
+    },
+    "linux": {
+      "category": "Education",
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "Speaking-AI-Professor-${version}-Linux-${arch}.${ext}"
+    }
+  },
   "dependencies": {
     "@google/genai": "^3.6.1",
+    "pdfjs-dist": "^6.5.438",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^45.5.0",
+    "electron-builder": "^26.18.0"
   }
 }

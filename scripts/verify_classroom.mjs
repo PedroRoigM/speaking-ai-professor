@@ -7,6 +7,7 @@
  */
 
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -78,16 +79,22 @@ await check('Sintaxis JS/MJS + Python', async () => {
 
 await check('Ollama Local + GPU/CPU', async () => {
   const st = await getOllamaStatus();
-  assert.ok(st.running, 'Ollama no responde en 127.0.0.1:11434');
+  if (!st.running) {
+    return 'opcional — Ollama no iniciado en este momento (disponible al abrir Ollama o modo Gemini Cloud)';
+  }
   const gpu = await getOllamaRunningGpuInfo();
   const gpuStr = gpu.length ? gpu.map((m) => `${m.name} (${m.gpuPct}% GPU)`).join(', ') : 'en espera (se carga al iniciar)';
   return `${st.models.length} modelos (${gpuStr})`;
 });
 
 await check('Poppler PDF (pdftoppm / pdftotext / pdfinfo)', async () => {
-  await execPoppler('pdftotext', ['-v']);
-  await execPoppler('pdftoppm', ['-v']);
-  return 'instalado y operativo';
+  try {
+    await execPoppler('pdftotext', ['-v']);
+    await execPoppler('pdftoppm', ['-v']);
+    return 'instalado y operativo';
+  } catch {
+    return 'opcional — fallback integrado pdfjs-dist activo (0 dependencias externas)';
+  }
 });
 
 await check('Verificador Matemático Python (auto-captura de variables)', async () => {
@@ -295,6 +302,47 @@ await check('Multiplataforma (macOS / Windows / Linux): Voces Nativas y WAV Pars
 
   const plat = getPlatformSummary();
   return `${plat.osLabel} (${plat.arch}) · catálogos Win/Linux/Mac + WAV parser OK`;
+});
+
+await check('Desktop Zero-Dependencies: JS Math Verifier + PDF.js Fallback + Electron Syntax', async () => {
+  const { verifyMathJsFallback } = await import(path.join(APP_DIR, 'lib', 'mathVerifier.mjs'));
+  const { getPdfPageCountJs, extractPdfPageLayoutJs } = await import(path.join(APP_DIR, 'lib', 'pdfFallback.mjs'));
+
+  // 1. Pure-JS math fallback accuracy (Steiner theorem + load transfer)
+  const mathRes = verifyMathJsFallback('m = 1350\na_x = 9.81\nh = 0.45\nL = 2.65\nresult = round((m * a_x * h) / L, 2)');
+  assert.strictEqual(mathRes.ok, true, `verifyMathJsFallback falló: ${JSON.stringify(mathRes)}`);
+  assert.ok(Math.abs(Number(mathRes.result) - 2248.88) < 0.05, `Resultado JS inesperado: ${mathRes.result}`);
+
+  // 2. Injection guard in JS fallback
+  const badRes = verifyMathJsFallback('import os; os.system("id")');
+  assert.strictEqual(badRes.ok, false, 'JS math fallback permitió código peligroso');
+
+  // 3. Pure-JS PDF fallback (works without Poppler installed)
+  const demoPdf = path.join(APP_DIR, 'demo', 'Física y Dinámica Aplicada', 'Fundamentos de Dinámica.pdf');
+  const fallbackPdf = path.join(APP_DIR, 'examples', 'demo_physics.pdf');
+  let targetPdf = '';
+  for (const p of [demoPdf, fallbackPdf]) {
+    try {
+      await fs.access(p);
+      targetPdf = p;
+      break;
+    } catch {}
+  }
+  let pdfNote = 'sin PDF de muestra local';
+  if (targetPdf) {
+    const pages = await getPdfPageCountJs(targetPdf);
+    assert.ok(pages >= 1, `getPdfPageCountJs devolvió ${pages}`);
+    const layout = await extractPdfPageLayoutJs(targetPdf, 1);
+    assert.ok(layout.vbW > 0 && layout.vbH > 0, 'Layout PDF.js inválido');
+    pdfNote = `${pages} págs + ${layout.lines.length} líneas vía pdfjs-dist`;
+  }
+
+  // 4. Verify Electron shell files syntax
+  for (const rel of ['electron/main.mjs', 'electron/preload.cjs']) {
+    execFileSync(process.execPath, ['--check', path.join(APP_DIR, rel)], { stdio: 'pipe' });
+  }
+
+  return `JS math fallback OK (${mathRes.result} N) + ${pdfNote} + Electron OK`;
 });
 
 console.log(failed === 0 ? '\n🎉 TODAS LAS VERIFICACIONES PASARON AL 100%\n' : `\n⚠️ ${failed} comprobaciones fallaron\n`);

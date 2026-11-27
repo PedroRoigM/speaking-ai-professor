@@ -93,15 +93,39 @@ flowchart LR
 
 ---
 
-## Quick Start (2 Minutes)
+## Quick Start — 1-Click Desktop App (Recommended · Zero Terminal)
+
+Download the standalone installer for your computer from [**GitHub Releases**](https://github.com/PedroRoigM/speaking-ai-professor/releases) — **no terminal, no Node.js, no Poppler, and no Python required**:
+
+| Operating System | Download | What's Included |
+| :--- | :--- | :--- |
+| **macOS (Apple Silicon & Intel)** | `Speaking-AI-Professor-*-mac-arm64.dmg` / `x64.dmg` | Drag to Applications · Built-in PDF.js engine · Native macOS voice · Ollama $0 + Gemini Cloud |
+| **Windows 10 / 11** | `Speaking-AI-Professor-*-Windows-Setup.exe` *(or Portable `.exe`)* | Standard installer + Start Menu shortcut · Built-in PDF.js engine · Native Windows SAPI voice · Ollama $0 + Gemini Cloud |
+| **Linux** | `Speaking-AI-Professor-*-Linux-x64.AppImage` | Executable AppImage · Built-in PDF.js engine · Ollama $0 + Gemini Cloud |
+
+> **AI Engine**: Install [**Ollama**](https://ollama.com/download) for **100% local $0** classes (recommended on PC/Mac), or paste a free [**Gemini API Key**](https://aistudio.google.com/apikey) inside **Ajustes** for instant cloud classes.
+
+### Build Desktop Installers Locally (Developers)
+
+```bash
+npm install
+npm run desktop        # Run native Electron app in dev mode
+npm run dist:mac       # Build macOS .dmg (dist/)
+npm run dist:win       # Build Windows .exe Setup + Portable (dist/)
+npm run dist:linux     # Build Linux .AppImage (dist/)
+```
+
+---
+
+## CLI / Developer Install (2 Minutes)
 
 ### Prerequisites
 - **Node.js 20+** ([nodejs.org](https://nodejs.org/))
-- **Poppler** (for rendering PDF slides):
+- **Poppler** *(optional — built-in `pdfjs-dist` fallback works automatically if absent)*:
   - macOS: `brew install poppler`
   - Ubuntu / Debian: `sudo apt install poppler-utils`
-  - Windows: `winget install oschwartz10612.Poppler` *(auto-installed by `npm run setup` and auto-detected even before PATH refresh)*
-- **Python 3.10+** (for math verification & Office document extraction)
+  - Windows: `winget install oschwartz10612.Poppler`
+- **Python 3.10+** *(optional — built-in JS math verifier fallback works automatically if absent; Python adds Office file extraction & Kokoro neural TTS)*
 - **At least one AI backend**:
   - **Local Free ($0)**: [Ollama](https://ollama.com/) + `ollama pull gemma4:12b` *(or `qwen3.5:9b`)*
   - **Or Cloud**: a free/paid `GEMINI_API_KEY` from [Google AI Studio](https://aistudio.google.com/apikey)
@@ -248,18 +272,24 @@ speaking-ai-professor/
 - **Estética ergonómica de estudio**: 3 temas pensados para reducir la fatiga visual (**Papel cálido** por defecto, **Sepia** sin luz azul y **Noche slate**), paneles laterales colapsables y divulgación progresiva.
 - **Watchdog anti-bloqueos en 5 capas** y botón `Verificar` para que la clase nunca se quede parada.
 
-### Instalación rápida (2 minutos)
+### Instalación en 1 clic — App de Escritorio (Recomendado · Sin terminal)
+
+Descarga el instalador para tu ordenador desde [**GitHub Releases**](https://github.com/PedroRoigM/speaking-ai-professor/releases) (no requiere instalar Node.js, Poppler ni Python):
+- **macOS (Apple Silicon / Intel)**: abre el `.dmg` y arrastra **Speaking AI Professor** a *Aplicaciones*.
+- **Windows 10 / 11**: ejecuta `Speaking-AI-Professor-*-Windows-Setup.exe` (o usa la versión `Portable.exe` sin instalar).
+- **Linux**: ejecuta el `.AppImage`.
+
+Para clases **100 % locales y gratis ($0)** solo necesitas instalar [**Ollama**](https://ollama.com/download) y descargar un modelo (desde la propia app en *Ajustes*). Si prefieres no usar tu GPU, pega una **API Key gratuita de Google Gemini** en *Ajustes*.
+
+### Instalación para desarrolladores / CLI (2 minutos)
 
 ```bash
 git clone https://github.com/PedroRoigM/speaking-ai-professor.git
 cd speaking-ai-professor
-chmod +x install.sh
 
-# Opción 1: Instalación estándar (Node + comprobación de Poppler)
-./install.sh
-
-# Opción 2: Mac Apple Silicon (M1/M2/M3/M4) con voz neuronal local $0 + CLI global `professor`
-./install.sh --all
+# Instalador universal multiplataforma (Windows · macOS · Linux):
+npm run setup        # Estándar
+npm run setup:all    # Completo (+ voz neuronal Kokoro + comando global `professor`)
 ollama pull gemma4:12b
 ```
 
