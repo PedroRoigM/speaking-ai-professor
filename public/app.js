@@ -3691,6 +3691,181 @@ async function pullModelFromUi(modelName, btn) {
   }
 }
 
+// ---------------- First-Launch Automatic Local AI ($0) Provisioner ----------------
+let bootstrapRunning = false;
+
+function populateBootstrapModal(localSetup) {
+  if (!localSetup?.recommended) return;
+  const rec = localSetup.recommended;
+  const sub = $('bootstrapHwSubtitle');
+  if (sub) {
+    sub.textContent = `Equipo detectado: ${rec.osLabel} · ${rec.memGb} GB RAM. Se configurará el modelo gratuito óptimo sin abrir ninguna terminal.`;
+  }
+  const sel = $('bootstrapModelSelect');
+  if (sel) {
+    sel.innerHTML = '';
+    for (const c of rec.choices || []) {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.id === rec.model ? `★ ${c.label} (Recomendado)` : c.label;
+      sel.appendChild(opt);
+    }
+    sel.value = rec.model;
+  }
+  const engDesc = $('bootStepEngineDesc');
+  if (engDesc) {
+    engDesc.textContent = localSetup.ollamaRunning
+      ? 'Ollama ya está activo y listo en tu equipo.'
+      : localSetup.ollamaInstalled
+        ? 'Ollama detectado: se arrancará automáticamente.'
+        : 'Se descargará e instalará Ollama oficial automáticamente (sin terminal).';
+  }
+  setBootstrapStepState('engine', localSetup.ollamaRunning ? 'done' : 'pending');
+  setBootstrapStepState('model', localSetup.hasModels ? 'done' : 'pending');
+  setBootstrapStepState('ready', !localSetup.needsBootstrap ? 'done' : 'pending');
+}
+
+function setBootstrapStepState(step, st) {
+  const map = { engine: 'bootStepEngine', model: 'bootStepModel', ready: 'bootStepReady' };
+  const el = $(map[step]);
+  if (!el) return;
+  el.setAttribute('data-state', st);
+  const num = el.querySelector('.bootstrap-step-num');
+  if (num) {
+    num.textContent = st === 'done' ? '✓' : step === 'engine' ? '1' : step === 'model' ? '2' : '3';
+  }
+}
+
+function openLocalBootstrapModal() {
+  const modal = $('localBootstrapModal');
+  if (modal) modal.classList.add('open');
+}
+
+function closeLocalBootstrapModal() {
+  if (bootstrapRunning) return;
+  const modal = $('localBootstrapModal');
+  if (modal) modal.classList.remove('open');
+}
+
+async function runLocalBootstrap() {
+  if (bootstrapRunning) return;
+  bootstrapRunning = true;
+  const model = $('bootstrapModelSelect')?.value || state.localSetup?.recommended?.model || 'qwen3.5:4b';
+  const startBtn = $('startBootstrapBtn');
+  const laterBtn = $('bootstrapLaterBtn');
+  const closeBtn = $('closeBootstrapBtn');
+  const errBox = $('bootstrapErrorBox');
+  const progWrap = $('bootstrapProgressWrap');
+  const fill = $('bootstrapProgressFill');
+  const statusTxt = $('bootstrapStatusText');
+
+  if (startBtn) { startBtn.disabled = true; startBtn.textContent = 'Configurando...'; }
+  if (laterBtn) laterBtn.disabled = true;
+  if (closeBtn) closeBtn.disabled = true;
+  if (errBox) errBox.textContent = '';
+  if (progWrap) progWrap.style.display = 'block';
+  if (fill) fill.style.width = '5%';
+  if (statusTxt) statusTxt.textContent = `Iniciando instalación gratuita de ${model}...`;
+  setBootstrapStepState('engine', 'active');
+
+  try {
+    const res = await fetch('/api/local/bootstrap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model }),
+    });
+    if (!res.ok || !res.body) {
+      throw new Error(`Error del servidor (HTTP ${res.status})`);
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let completedModel = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const evt = JSON.parse(line);
+          if (evt.error) throw new Error(evt.error);
+          if (typeof evt.pct === 'number' && fill) {
+            fill.style.width = `${Math.max(4, Math.min(100, evt.pct))}%`;
+          }
+          if (evt.status && statusTxt) statusTxt.textContent = evt.status;
+          if (evt.step === 'engine') {
+            setBootstrapStepState('engine', evt.done ? 'done' : 'active');
+          } else if (evt.step === 'model') {
+            setBootstrapStepState('engine', 'done');
+            setBootstrapStepState('model', 'active');
+          } else if (evt.step === 'ready' && evt.ok) {
+            setBootstrapStepState('engine', 'done');
+            setBootstrapStepState('model', 'done');
+            setBootstrapStepState('ready', 'done');
+            completedModel = evt.model || model;
+            if (evt.ollama) populateOllamaModels(evt.ollama);
+          }
+        } catch (parseErr) {
+          if (parseErr?.message && !String(parseErr.message).includes('JSON')) {
+            throw parseErr;
+          }
+        }
+      }
+    }
+
+    // Refresh live status and switch automatically to Local ($0)
+    const stRes = await fetch('/api/ollama/status');
+    const stData = await stRes.json();
+    populateOllamaModels(stData.ollama);
+    const targetVal = completedModel || model;
+    if ($('localModelSelect')) {
+      const matchOpt = [...$('localModelSelect').options].find(
+        (o) => o.value === targetVal || o.value.startsWith(`${targetVal}:`) || targetVal.startsWith(`${o.value}:`),
+      );
+      if (matchOpt) $('localModelSelect').value = matchOpt.value;
+    }
+    try { localStorage.setItem('prof-engine', 'local'); } catch {}
+    applyEngineUi('local');
+    setTimeout(() => {
+      bootstrapRunning = false;
+      closeLocalBootstrapModal();
+    }, 900);
+  } catch (err) {
+    if (errBox) {
+      errBox.textContent = `No se pudo completar la instalación automática: ${err.message}. Puedes intentarlo de nuevo o usar Gemini Cloud gratis.`;
+    }
+    if (startBtn) { startBtn.disabled = false; startBtn.textContent = 'Reintentar instalación gratis'; }
+    if (laterBtn) laterBtn.disabled = false;
+    if (closeBtn) closeBtn.disabled = false;
+    bootstrapRunning = false;
+  }
+}
+
+$('startBootstrapBtn')?.addEventListener('click', runLocalBootstrap);
+$('bootstrapLaterBtn')?.addEventListener('click', () => {
+  try { sessionStorage.setItem('sap-bootstrap-dismissed', '1'); } catch {}
+  closeLocalBootstrapModal();
+});
+$('closeBootstrapBtn')?.addEventListener('click', () => {
+  try { sessionStorage.setItem('sap-bootstrap-dismissed', '1'); } catch {}
+  closeLocalBootstrapModal();
+});
+$('bootstrapSwitchCloudBtn')?.addEventListener('click', () => {
+  if (bootstrapRunning) return;
+  try { sessionStorage.setItem('sap-bootstrap-dismissed', '1'); } catch {}
+  closeLocalBootstrapModal();
+  applyEngineUi('gemini');
+  $('apiKeyModal')?.classList.add('open');
+});
+$('openBootstrapFromSettingsBtn')?.addEventListener('click', () => {
+  $('settingsModal')?.classList.remove('open');
+  openLocalBootstrapModal();
+});
+
 // ---------------- Boot ----------------
 async function init() {
   const res = await fetch('/api/config');
@@ -3700,6 +3875,8 @@ async function init() {
   state.workspaceRoot = cfg.workspaceRoot || '';
   state.recommendedLocalModels = cfg.recommendedLocalModels || [];
   state.voiceCapabilities = cfg.voiceCapabilities || state.voiceCapabilities;
+  state.localSetup = cfg.localSetup || null;
+  if (state.localSetup) populateBootstrapModal(state.localSetup);
 
   const modelSel = $('modelSelect');
   for (const m of state.models) {
@@ -3767,6 +3944,14 @@ async function init() {
     }
   } catch {}
   applyEngineUi(preferredEngine);
+
+  // First-launch zero-terminal auto-setup: if no local model is ready yet and no Gemini key is saved,
+  // guide the user to install Ollama + the RAM-optimal free local model in 1 click!
+  let dismissedThisSession = false;
+  try { dismissedThisSession = sessionStorage.getItem('sap-bootstrap-dismissed') === '1'; } catch {}
+  if (cfg.localSetup?.needsBootstrap && !cfg.hasApiKey && !dismissedThisSession) {
+    openLocalBootstrapModal();
+  }
 }
 
 init();

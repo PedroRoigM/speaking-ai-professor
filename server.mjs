@@ -39,6 +39,11 @@ import {
   pullOllamaModel,
 } from './lib/localProfessor.mjs';
 import {
+  getLocalSetupSummary,
+  ensureOllamaRunning,
+  bootstrapLocalAi,
+} from './lib/localProvisioner.mjs';
+import {
   AVAILABLE_MODELS,
   AVAILABLE_CLASS_MODELS,
   AVAILABLE_VOICES,
@@ -224,6 +229,10 @@ async function initializeServerState({ dir = '', port = 0, pickFolderNative = nu
     voiceEngine.warmup();
   }
   [initialOllama, initialGpuPs] = await Promise.all([getOllamaStatus(), getOllamaRunningGpuInfo()]);
+  if (!initialOllama.running) {
+    // Non-blocking background wake-up if Ollama is already installed on disk (e.g. right after Windows/Mac reboot)
+    ensureOllamaRunning().catch(() => {});
+  }
   serverInitialized = true;
 }
 
@@ -262,7 +271,11 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && pathname === '/api/config') {
-      const [ollama, pdfs] = await Promise.all([getOllamaStatus(), pdfStage.listPdfs()]);
+      const [ollama, pdfs, localSetup] = await Promise.all([
+        getOllamaStatus(),
+        pdfStage.listPdfs(),
+        getLocalSetupSummary(),
+      ]);
       return sendJson(res, 200, {
         hasApiKey: Boolean(runtimeApiKey),
         platform: process.platform,
@@ -273,6 +286,7 @@ const server = http.createServer(async (req, res) => {
         localVoices: getLocalVoicesForPlatform(),
         recommendedLocalModels: RECOMMENDED_LOCAL_MODELS,
         ollama,
+        localSetup,
         voiceCapabilities: voiceEngine.capabilities,
         modes: Object.entries(PROFESSOR_MODES).map(([id, m]) => ({ id, name: m.name, short: m.short })),
         domainProfile: library.domainProfile,
@@ -383,6 +397,32 @@ const server = http.createServer(async (req, res) => {
         res.write(JSON.stringify({ status: 'done', ok: true }) + '\n');
       } catch (err) {
         res.write(JSON.stringify({ error: err.message }) + '\n');
+      }
+      return res.end();
+    }
+
+    if (req.method === 'POST' && pathname === '/api/local/bootstrap') {
+      const body = await readJsonBody(req, 1024 * 16);
+      const requestedModel = String(body.model || '').trim();
+      if (requestedModel && !/^[a-zA-Z0-9._:/-]{2,64}$/.test(requestedModel)) {
+        return sendJson(res, 400, { error: 'Invalid model name' });
+      }
+      res.writeHead(200, {
+        ...SECURITY_HEADERS,
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'no-store',
+      });
+      try {
+        await bootstrapLocalAi({
+          model: requestedModel,
+          onProgress: (evt) => {
+            try {
+              res.write(JSON.stringify(evt) + '\n');
+            } catch {}
+          },
+        });
+      } catch (err) {
+        res.write(JSON.stringify({ ok: false, error: err.message || 'Bootstrap failed' }) + '\n');
       }
       return res.end();
     }

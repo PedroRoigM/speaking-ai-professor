@@ -487,6 +487,11 @@
         </div>
         <div id="quickPullBar" class="quick-pull-bar"></div>
         <div id="pullProgress" class="pull-progress" style="display:none;"></div>
+        <div style="margin: 6px 0 10px;">
+          <button id="openBootstrapFromSettingsBtn" type="button" class="btn btn-xs btn-subtle">
+            ✨ Instalar / configurar Ollama + modelo gratis automáticamente
+          </button>
+        </div>
         <div class="field">
           <label for="localSttSelect">Reconocimiento de voz (STT)</label>
           <select id="localSttSelect">
@@ -604,6 +609,71 @@
       <div class="modal-actions">
         <button id="closeFolderModalBtn" type="button" class="btn btn-subtle">Cancelar</button>
         <button id="switchFolderBtn" type="button" class="btn btn-primary">Usar esta carpeta</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- First-Launch Automatic Local AI ($0) Setup Modal -->
+  <div id="localBootstrapModal" class="modal-backdrop">
+    <div class="modal bootstrap-modal" role="dialog" aria-modal="true" aria-labelledby="bootstrapModalTitle">
+      <div class="modal-header">
+        <div>
+          <h2 id="bootstrapModalTitle">Configura tu Profesor IA Local Gratis ($0)</h2>
+          <p class="modal-subtitle" id="bootstrapHwSubtitle">
+            Instala automáticamente el motor local y un modelo adaptado a la memoria de tu ordenador — sin terminal ni claves.
+          </p>
+        </div>
+        <button id="closeBootstrapBtn" type="button" class="btn-icon" aria-label="Cerrar">✕</button>
+      </div>
+
+      <div class="bootstrap-steps">
+        <div class="bootstrap-step" id="bootStepEngine" data-state="pending">
+          <span class="bootstrap-step-num">1</span>
+          <div>
+            <strong>Motor local Ollama</strong>
+            <small id="bootStepEngineDesc">Se detectará o instalará automáticamente en tu ordenador.</small>
+          </div>
+        </div>
+        <div class="bootstrap-step" id="bootStepModel" data-state="pending">
+          <span class="bootstrap-step-num">2</span>
+          <div>
+            <strong>Modelo local gratuito por defecto ($0)</strong>
+            <small id="bootStepModelDesc">Descarga única según la RAM de tu equipo; después funciona 100 % sin coste.</small>
+          </div>
+        </div>
+        <div class="bootstrap-step" id="bootStepReady" data-state="pending">
+          <span class="bootstrap-step-num">3</span>
+          <div>
+            <strong>Aula lista en 1 clic</strong>
+            <small>Abre cualquier PDF y empieza tu clase hablada con pizarra interactiva.</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="field" style="margin-top: 12px;">
+        <label for="bootstrapModelSelect">Modelo local recomendado para tu equipo</label>
+        <select id="bootstrapModelSelect"></select>
+      </div>
+
+      <div id="bootstrapProgressWrap" class="bootstrap-progress-wrap" style="display:none;">
+        <div class="bootstrap-progress-track">
+          <div id="bootstrapProgressFill" class="bootstrap-progress-fill" style="width: 0%;"></div>
+        </div>
+        <div id="bootstrapStatusText" class="bootstrap-status-text">Preparando instalación...</div>
+      </div>
+
+      <div id="bootstrapErrorBox" class="modal-status" style="color: var(--rose);"></div>
+
+      <div class="modal-footer-split" style="margin-top: 14px;">
+        <button id="bootstrapSwitchCloudBtn" type="button" class="btn btn-sm btn-subtle">
+          Usar Gemini Cloud (API Key)
+        </button>
+        <div style="display:flex; gap:8px;">
+          <button id="bootstrapLaterBtn" type="button" class="btn btn-sm btn-subtle">Más tarde</button>
+          <button id="startBootstrapBtn" type="button" class="btn btn-sm btn-primary">
+            ✨ Instalar modelo gratis ahora
+          </button>
+        </div>
       </div>
     </div>
   </div>

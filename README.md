@@ -105,7 +105,7 @@ Download the standalone installer for your computer from [**GitHub Releases**](h
 | **Linux** | `Speaking-AI-Professor-*-Linux-x64.AppImage` | Executable AppImage · Built-in PDF.js engine · Ollama $0 + Gemini Cloud |
 | **Android (Phone & Tablet)** | `Speaking-AI-Professor-*-Android.apk` | Direct APK install · Built-in PDF.js + 14-template domain-adaptive chalkboard · Native Android TTS · **Gemini Cloud-only** (zero local models to protect phone battery & RAM) |
 
-> **AI Engine**: Install [**Ollama**](https://ollama.com/download) for **100% local $0** classes (recommended on PC/Mac), or paste a free [**Gemini API Key**](https://aistudio.google.com/apikey) inside **Ajustes** for instant cloud classes.
+> **Zero-Terminal Local AI ($0) on First Launch**: On Windows, macOS, and Linux, if Ollama or a local model isn't ready yet, the desktop app opens a **1-click Auto-Setup modal** that detects your RAM, installs/starts Ollama automatically, and downloads the ideal free local model (`qwen2.5:3b` for 8 GB RAM, `qwen3.5:4b` for 16 GB RAM, `qwen3.5:9b` for 24+ GB RAM) with a live progress bar — no terminal needed! You can also switch to a free [**Gemini API Key**](https://aistudio.google.com/apikey) anytime.
 
 ### Build Desktop Installers Locally (Developers)
 
@@ -282,7 +282,7 @@ Descarga el instalador para tu ordenador desde [**GitHub Releases**](https://git
 - **Linux**: ejecuta el `.AppImage`.
 - **Android (móvil y tablet)**: descarga `Speaking-AI-Professor-*-Android.apk` e instálalo directamente (**100 % en la nube con Gemini Cloud**, sin modelos locales para no sobrecargar el teléfono).
 
-Para clases **100 % locales y gratis ($0)** solo necesitas instalar [**Ollama**](https://ollama.com/download) y descargar un modelo (desde la propia app en *Ajustes*). Si prefieres no usar tu GPU, pega una **API Key gratuita de Google Gemini** en *Ajustes*.
+Al abrir la app de ordenador por primera vez, si no tienes Ollama o ningún modelo descargado, aparece un **asistente automático en 1 clic** que detecta la RAM de tu PC, instala/arranca Ollama sin abrir terminal y descarga el modelo local gratuito ideal (`qwen2.5:3b` en 8 GB, `qwen3.5:4b` en 16 GB, `qwen3.5:9b` en 24+ GB). También puedes usar una **API Key gratuita de Google Gemini** en *Ajustes*.
 
 ### Instalación para desarrolladores / CLI (2 minutos)
 

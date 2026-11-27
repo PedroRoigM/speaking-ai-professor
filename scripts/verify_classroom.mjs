@@ -56,6 +56,7 @@ await check('Sintaxis JS/MJS + Python', async () => {
     'lib/classTimeline.mjs',
     'lib/pdfStage.mjs',
     'lib/localVoice.mjs',
+    'lib/localProvisioner.mjs',
     'lib/mathVerifier.mjs',
     'lib/webSearch.mjs',
     'lib/webResearchAgent.mjs',
@@ -361,12 +362,16 @@ await check('Desktop Zero-Dependencies: JS Math Verifier + PDF.js Fallback + Ele
     pdfNote = `${pages} págs + ${layout.lines.length} líneas vía pdfjs-dist`;
   }
 
-  // 4. Verify Electron shell files syntax
+  // 4. Verify Electron shell files syntax & RAM-based default local model selector
   for (const rel of ['electron/main.mjs', 'electron/preload.cjs']) {
     execFileSync(process.execPath, ['--check', path.join(APP_DIR, rel)], { stdio: 'pipe' });
   }
+  const { getRecommendedDefaultModel } = await importLocal('lib', 'localProvisioner.mjs');
+  assert.strictEqual(getRecommendedDefaultModel(8).model, 'qwen2.5:3b', 'Modelo 8GB RAM incorrecto');
+  assert.strictEqual(getRecommendedDefaultModel(16).model, 'qwen3.5:4b', 'Modelo 16GB RAM incorrecto');
+  assert.strictEqual(getRecommendedDefaultModel(24).model, 'qwen3.5:9b', 'Modelo 24GB RAM incorrecto');
 
-  return `JS math fallback OK (${mathRes.result} N) + ${pdfNote} + Electron OK`;
+  return `JS math fallback OK (${mathRes.result} N) + ${pdfNote} + Auto-Provisioner (8/16/24GB) + Electron OK`;
 });
 
 console.log(failed === 0 ? '\n🎉 TODAS LAS VERIFICACIONES PASARON AL 100%\n' : `\n⚠️ ${failed} comprobaciones fallaron\n`);
