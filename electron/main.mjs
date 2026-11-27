@@ -1,9 +1,11 @@
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, Menu, session, shell } from 'electron';
 import { startServer } from '../server.mjs';
+import { checkLatestGithubRelease, downloadReleaseAsset } from './updater.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -137,6 +139,11 @@ function buildAppMenu() {
       label: 'Ayuda',
       submenu: [
         {
+          label: 'Buscar actualizaciones...',
+          click: () => runUpdateCheck({ interactive: true }),
+        },
+        { type: 'separator' },
+        {
           label: 'Descargar Ollama (IA Local $0)',
           click: () => shell.openExternal('https://ollama.com/download'),
         },
@@ -153,6 +160,156 @@ function buildAppMenu() {
     },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+let updateCheckInFlight = false;
+
+async function runUpdateCheck({ interactive = false } = {}) {
+  if (updateCheckInFlight) return;
+  updateCheckInFlight = true;
+  try {
+    const isPortable = Boolean(process.env.PORTABLE_EXECUTABLE_DIR);
+    const info = await checkLatestGithubRelease({
+      currentVersion: app.getVersion(),
+      platform: process.platform,
+      arch: process.arch,
+      isPortable,
+    });
+
+    if (!info.ok) {
+      if (interactive && mainWindow && !mainWindow.isDestroyed()) {
+        await dialog.showMessageBox(mainWindow, {
+          type: 'info',
+          title: 'Buscar actualizaciones',
+          message: 'No se pudo comprobar si hay actualizaciones en este momento.',
+          detail: info.error || 'Comprueba tu conexión a internet e inténtalo de nuevo.',
+          buttons: ['Entendido'],
+        });
+      }
+      return;
+    }
+
+    if (!info.hasUpdate) {
+      if (interactive && mainWindow && !mainWindow.isDestroyed()) {
+        await dialog.showMessageBox(mainWindow, {
+          type: 'info',
+          title: 'Speaking AI Professor está actualizado',
+          message: `Ya tienes la última versión (v${info.currentVersion}).`,
+          buttons: ['Genial'],
+        });
+      }
+      return;
+    }
+
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    const sizeMb = info.asset?.size ? ` (~${(info.asset.size / (1024 * 1024)).toFixed(0)} MB)` : '';
+    const detailLines = [
+      `Versión actual: v${info.currentVersion}  →  Nueva versión: ${info.latestTag}${sizeMb}`,
+      info.releaseNotes ? `\nNovedades:\n${info.releaseNotes}` : '',
+      info.asset
+        ? '\nSi pulsas «Actualizar ahora», se descargará automáticamente el instalador exacto para tu ordenador.'
+        : '\nPuedes descargar la nueva versión desde la página oficial de GitHub Releases.',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const buttons = info.asset
+      ? ['Actualizar ahora', 'Ver novedades en GitHub', 'Más tarde']
+      : ['Abrir GitHub Releases', 'Más tarde'];
+
+    const choice = await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Nueva versión disponible — Speaking AI Professor',
+      message: `Hay una nueva actualización disponible (${info.latestTag})`,
+      detail: detailLines,
+      buttons,
+      defaultId: 0,
+      cancelId: buttons.length - 1,
+    });
+
+    if (!info.asset) {
+      if (choice.response === 0) shell.openExternal(info.releaseUrl).catch(() => {});
+      return;
+    }
+
+    if (choice.response === 1) {
+      shell.openExternal(info.releaseUrl).catch(() => {});
+      return;
+    }
+    if (choice.response !== 0) return;
+
+    // User confirmed update: download exact installer with live progress in title & dock/taskbar!
+    const origTitle = mainWindow.getTitle();
+    try {
+      mainWindow.setProgressBar(0.05);
+      const downloadedPath = await downloadReleaseAsset(info.asset.url, info.asset.name, ({ pct, downloadedMb, totalMb }) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.setTitle(`Descargando ${info.latestTag} — ${pct}% (${downloadedMb} / ${totalMb} MB) · Speaking AI Professor`);
+          mainWindow.setProgressBar(Math.max(0.05, Math.min(0.99, pct / 100)));
+        }
+      });
+
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setProgressBar(-1);
+        mainWindow.setTitle(origTitle);
+      }
+
+      if (process.platform === 'win32') {
+        if (isPortable) {
+          shell.showItemInFolder(downloadedPath);
+          spawn(downloadedPath, [], { detached: true, stdio: 'ignore' }).unref();
+        } else {
+          spawn(downloadedPath, [], { detached: true, stdio: 'ignore' }).unref();
+        }
+        app.quit();
+        return;
+      }
+
+      if (process.platform === 'darwin') {
+        await shell.openPath(downloadedPath);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          await dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: 'Instalador listo',
+            message: `Se ha abierto ${info.asset.name}`,
+            detail: 'Arrastra «Speaking AI Professor» a la carpeta Aplicaciones y elige Reemplazar. Esta ventana se cerrará ahora para permitir el reemplazo.',
+            buttons: ['Cerrar y actualizar'],
+          });
+        }
+        app.quit();
+        return;
+      }
+
+      // Linux AppImage
+      shell.showItemInFolder(downloadedPath);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        await dialog.showMessageBox(mainWindow, {
+          type: 'info',
+          title: 'Actualización descargada',
+          message: `Nueva versión guardada: ${info.asset.name}`,
+          detail: `Se ha descargado con permisos de ejecución en:\n${downloadedPath}`,
+          buttons: ['Entendido'],
+        });
+      }
+    } catch (dlErr) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setProgressBar(-1);
+        mainWindow.setTitle(origTitle);
+        const retryChoice = await dialog.showMessageBox(mainWindow, {
+          type: 'warning',
+          title: 'Error al descargar la actualización',
+          message: 'No se pudo descargar el instalador automáticamente.',
+          detail: dlErr.message || 'Puedes descargarlo directamente desde GitHub Releases.',
+          buttons: ['Abrir en navegador', 'Cerrar'],
+          defaultId: 0,
+        });
+        if (retryChoice.response === 0) shell.openExternal(info.releaseUrl).catch(() => {});
+      }
+    }
+  } finally {
+    updateCheckInFlight = false;
+  }
 }
 
 function createMainWindow(url) {
@@ -229,6 +386,10 @@ app.whenReady().then(async () => {
       pickFolderNative: pickFolderWithElectronDialog,
     });
     createMainWindow(serverHandle.url);
+    // Non-blocking background update check 3.5s after app launch (only prompts if a newer GitHub Release exists!)
+    setTimeout(() => {
+      runUpdateCheck({ interactive: false }).catch(() => {});
+    }, 3500);
   } catch (err) {
     dialog.showErrorBox(
       'Speaking AI Professor — Error al iniciar',

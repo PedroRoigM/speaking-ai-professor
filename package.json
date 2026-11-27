@@ -1,6 +1,6 @@
 {
   "name": "speaking-ai-professor",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "type": "module",
   "main": "electron/main.mjs",
   "description": "Real-time dual-screen Speaking AI Professor with PDF projection, parametric SVG chalkboard, Python/JS math verification, web fact-checking, and 100% local ($0 Ollama + native/Kokoro voice) or Gemini Live Cloud modes.",

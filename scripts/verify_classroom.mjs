@@ -370,8 +370,8 @@ await check('Desktop Zero-Dependencies: JS Math Verifier + PDF.js Fallback + Ele
     pdfNote = `${pages} págs + ${layout.lines.length} líneas vía pdfjs-dist`;
   }
 
-  // 4. Verify Electron shell files syntax & RAM-based default local model selector
-  for (const rel of ['electron/main.mjs', 'electron/preload.cjs']) {
+  // 4. Verify Electron shell files syntax, RAM-based default local model selector & GitHub Release auto-updater
+  for (const rel of ['electron/main.mjs', 'electron/preload.cjs', 'electron/updater.mjs']) {
     execFileSync(process.execPath, ['--check', path.join(APP_DIR, rel)], { stdio: 'pipe' });
   }
   const { getRecommendedDefaultModel } = await importLocal('lib', 'localProvisioner.mjs');
@@ -379,7 +379,24 @@ await check('Desktop Zero-Dependencies: JS Math Verifier + PDF.js Fallback + Ele
   assert.strictEqual(getRecommendedDefaultModel(16).model, 'qwen3.5:4b', 'Modelo 16GB RAM incorrecto');
   assert.strictEqual(getRecommendedDefaultModel(24).model, 'qwen3.5:9b', 'Modelo 24GB RAM incorrecto');
 
-  return `JS math fallback OK (${mathRes.result} N) + ${pdfNote} + Auto-Provisioner (8/16/24GB) + Electron OK`;
+  const { compareSemver, selectReleaseAsset } = await importLocal('electron', 'updater.mjs');
+  assert.ok(compareSemver('1.4.0', '1.3.2') > 0, 'compareSemver falló en 1.4.0 > 1.3.2');
+  assert.ok(compareSemver('v1.10.0', '1.9.9') > 0, 'compareSemver falló en 1.10.0 > 1.9.9');
+  assert.strictEqual(compareSemver('v1.4.0', '1.4.0'), 0, 'compareSemver igualdad falló');
+  const mockAssets = [
+    { name: 'Speaking-AI-Professor-1.4.0-Windows-Setup.exe', browser_download_url: 'https://github.com/a/setup.exe', size: 100 },
+    { name: 'Speaking-AI-Professor-1.4.0-Windows-Portable.exe', browser_download_url: 'https://github.com/a/portable.exe', size: 100 },
+    { name: 'Speaking-AI-Professor-1.4.0-mac-arm64.dmg', browser_download_url: 'https://github.com/a/arm64.dmg', size: 100 },
+    { name: 'Speaking-AI-Professor-1.4.0-mac-x64.dmg', browser_download_url: 'https://github.com/a/x64.dmg', size: 100 },
+    { name: 'Speaking-AI-Professor-1.4.0-Linux-x86_64.AppImage', browser_download_url: 'https://github.com/a/app.AppImage', size: 100 },
+  ];
+  assert.strictEqual(selectReleaseAsset(mockAssets, { platform: 'win32', isPortable: false }).name, 'Speaking-AI-Professor-1.4.0-Windows-Setup.exe');
+  assert.strictEqual(selectReleaseAsset(mockAssets, { platform: 'win32', isPortable: true }).name, 'Speaking-AI-Professor-1.4.0-Windows-Portable.exe');
+  assert.strictEqual(selectReleaseAsset(mockAssets, { platform: 'darwin', arch: 'arm64' }).name, 'Speaking-AI-Professor-1.4.0-mac-arm64.dmg');
+  assert.strictEqual(selectReleaseAsset(mockAssets, { platform: 'darwin', arch: 'x64' }).name, 'Speaking-AI-Professor-1.4.0-mac-x64.dmg');
+  assert.strictEqual(selectReleaseAsset(mockAssets, { platform: 'linux', arch: 'x64' }).name, 'Speaking-AI-Professor-1.4.0-Linux-x86_64.AppImage');
+
+  return `JS math fallback OK (${mathRes.result} N) + ${pdfNote} + Auto-Provisioner + Auto-Updater OK`;
 });
 
 console.log(failed === 0 ? '\n🎉 TODAS LAS VERIFICACIONES PASARON AL 100%\n' : `\n⚠️ ${failed} comprobaciones fallaron\n`);
