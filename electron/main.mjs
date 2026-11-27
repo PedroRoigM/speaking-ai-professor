@@ -5,7 +5,13 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, Menu, session, shell } from 'electron';
 import { startServer } from '../server.mjs';
-import { checkLatestGithubRelease, downloadReleaseAsset } from './updater.mjs';
+import {
+  checkLatestGithubRelease,
+  downloadReleaseAsset,
+  applyMacDmgUpdateInPlace,
+  readUpdaterState,
+  saveSkippedVersion,
+} from './updater.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -201,6 +207,13 @@ async function runUpdateCheck({ interactive = false } = {}) {
       return;
     }
 
+    if (!interactive) {
+      const st = await readUpdaterState();
+      if (st.skippedVersion && st.skippedVersion === info.latestVersion) {
+        return;
+      }
+    }
+
     if (!mainWindow || mainWindow.isDestroyed()) return;
 
     const sizeMb = info.asset?.size ? ` (~${(info.asset.size / (1024 * 1024)).toFixed(0)} MB)` : '';
@@ -208,15 +221,15 @@ async function runUpdateCheck({ interactive = false } = {}) {
       `Versión actual: v${info.currentVersion}  →  Nueva versión: ${info.latestTag}${sizeMb}`,
       info.releaseNotes ? `\nNovedades:\n${info.releaseNotes}` : '',
       info.asset
-        ? '\nSi pulsas «Actualizar ahora», se descargará automáticamente el instalador exacto para tu ordenador.'
+        ? '\nSi pulsas «Actualizar ahora», la app se descargará, se instalará automáticamente y volverá a abrirse actualizada.'
         : '\nPuedes descargar la nueva versión desde la página oficial de GitHub Releases.',
     ]
       .filter(Boolean)
       .join('\n');
 
     const buttons = info.asset
-      ? ['Actualizar ahora', 'Ver novedades en GitHub', 'Más tarde']
-      : ['Abrir GitHub Releases', 'Más tarde'];
+      ? ['Actualizar ahora', 'Ver novedades', 'Omitir esta versión', 'Más tarde']
+      : ['Abrir GitHub Releases', 'Omitir esta versión', 'Más tarde'];
 
     const choice = await dialog.showMessageBox(mainWindow, {
       type: 'info',
@@ -230,11 +243,16 @@ async function runUpdateCheck({ interactive = false } = {}) {
 
     if (!info.asset) {
       if (choice.response === 0) shell.openExternal(info.releaseUrl).catch(() => {});
+      else if (choice.response === 1) await saveSkippedVersion(info.latestVersion).catch(() => {});
       return;
     }
 
     if (choice.response === 1) {
       shell.openExternal(info.releaseUrl).catch(() => {});
+      return;
+    }
+    if (choice.response === 2) {
+      await saveSkippedVersion(info.latestVersion).catch(() => {});
       return;
     }
     if (choice.response !== 0) return;
@@ -267,14 +285,25 @@ async function runUpdateCheck({ interactive = false } = {}) {
       }
 
       if (process.platform === 'darwin') {
+        const applied = await applyMacDmgUpdateInPlace({
+          dmgPath: downloadedPath,
+          execPath: process.execPath,
+          mainPid: process.pid,
+        });
+        if (applied.ok) {
+          // Detached atomic helper is waiting for this PID to exit, will replace .app and relaunch automatically!
+          app.quit();
+          return;
+        }
+        // Fallback only if app isn't in a writable location (e.g. launched directly from a read-only DMG)
         await shell.openPath(downloadedPath);
         if (mainWindow && !mainWindow.isDestroyed()) {
           await dialog.showMessageBox(mainWindow, {
             type: 'info',
-            title: 'Instalador listo',
+            title: 'Instalación manual requerida',
             message: `Se ha abierto ${info.asset.name}`,
-            detail: 'Arrastra «Speaking AI Professor» a la carpeta Aplicaciones y elige Reemplazar. Esta ventana se cerrará ahora para permitir el reemplazo.',
-            buttons: ['Cerrar y actualizar'],
+            detail: `${applied.reason || ''}\n\nArrastra «Speaking AI Professor» a la carpeta Aplicaciones y elige Reemplazar.`,
+            buttons: ['Cerrar para reemplazar'],
           });
         }
         app.quit();

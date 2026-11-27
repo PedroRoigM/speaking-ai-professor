@@ -379,7 +379,15 @@ await check('Desktop Zero-Dependencies: JS Math Verifier + PDF.js Fallback + Ele
   assert.strictEqual(getRecommendedDefaultModel(16).model, 'qwen3.5:4b', 'Modelo 16GB RAM incorrecto');
   assert.strictEqual(getRecommendedDefaultModel(24).model, 'qwen3.5:9b', 'Modelo 24GB RAM incorrecto');
 
-  const { compareSemver, selectReleaseAsset } = await importLocal('electron', 'updater.mjs');
+  const { compareSemver, selectReleaseAsset, resolveMacAppBundlePath } = await importLocal('electron', 'updater.mjs');
+  assert.strictEqual(
+    resolveMacAppBundlePath('/Applications/Speaking AI Professor.app/Contents/MacOS/Speaking AI Professor'),
+    '/Applications/Speaking AI Professor.app',
+  );
+  assert.strictEqual(
+    resolveMacAppBundlePath('/Volumes/Speaking AI Professor/Speaking AI Professor.app/Contents/MacOS/Speaking AI Professor'),
+    null,
+  );
   assert.ok(compareSemver('1.4.0', '1.3.2') > 0, 'compareSemver falló en 1.4.0 > 1.3.2');
   assert.ok(compareSemver('v1.10.0', '1.9.9') > 0, 'compareSemver falló en 1.10.0 > 1.9.9');
   assert.strictEqual(compareSemver('v1.4.0', '1.4.0'), 0, 'compareSemver igualdad falló');
