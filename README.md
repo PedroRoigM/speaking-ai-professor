@@ -50,9 +50,10 @@ Most AI study tools dump walls of Markdown text into a chat box. Real engineerin
 | **Voice Input (STT)** | Instant Browser Speech **or** 100% offline **Whisper** (`mlx-whisper` / `faster-whisper`, `Space` PTT) | Full-duplex VAD with Anti-Echo Shield |
 | **Verified Web Research** | Optional checkbox: dedicated 4-phase Web Research Agent (authority tiers, SEO-farm filter, SSRF guard, zero-drift audit, clickable **Referencias web** panel) | Same dedicated 4-phase Web Research Agent + clickable **Referencias web** panel |
 
-### 3. Deterministic 12-Template Parametric Blueprint Engine
-Instead of letting an LLM hallucinate misaligned raw SVG coordinates or blank graphs, the chalkboard uses a deterministic parametric SVG engine (`public/blueprintTemplates.js`) featuring:
-- **12 clean schematic templates** (free-body diagrams, vehicle side/top/front views, 2-DOF quarter-car suspension, force & power balance, tire load sensitivity $\mu(F_z)$ & $F_y(F_z)$, Pacejka slip curve, Kamm friction circle, 3D inertia & Steiner theorem, generic auto-scaled X-Y plotter, and 2-column conceptual comparison).
+### 3. Domain-Adaptive 14-Template Parametric Chalkboard Engine
+Instead of letting an LLM hallucinate misaligned raw SVG coordinates or off-topic diagrams, the chalkboard auto-detects the subject of each PDF and uses a deterministic parametric SVG engine (`public/blueprintTemplates.js`) featuring:
+- **4 Universal Knowledge Templates** (used for literature, history, medicine, law, biology, economics, philosophy, CS, etc.): radial concept maps (`concept_map`), sequential timelines / cause-effect flows (`timeline_flow`), 2-column comparisons (`comparison`), and auto-scaled X-Y charts (`xy_graph`).
+- **10 Physics & Engineering Templates** (auto-enabled only for matching STEM/automotive PDFs): free-body diagrams, 3D inertia & Steiner theorem, vehicle side/top/front views, 2-DOF quarter-car suspension, force & power balance, tire load sensitivity $\mu(F_z)$ & $F_y(F_z)$, Pacejka slip curve, and Kamm friction circle.
 - **Automatic Bounding-Box Label Collision Avoider** (`createPlacer()`): guarantees zero overlapping badges or labels.
 - **Unicode-Aware Math Compiler** (`public/stageRenderer.js`): renders clean typographic fractions, square roots, Greek symbols, and accented subscripts (e.g. `μ_teórico`, `F_tracción`) both in HTML and SVG `<tspan>`.
 
@@ -102,7 +103,7 @@ Download the standalone installer for your computer from [**GitHub Releases**](h
 | **macOS (Apple Silicon & Intel)** | `Speaking-AI-Professor-*-mac-arm64.dmg` / `x64.dmg` | Drag to Applications · Built-in PDF.js engine · Native macOS voice · Ollama $0 + Gemini Cloud |
 | **Windows 10 / 11** | `Speaking-AI-Professor-*-Windows-Setup.exe` *(or Portable `.exe`)* | Standard installer + Start Menu shortcut · Built-in PDF.js engine · Native Windows SAPI voice · Ollama $0 + Gemini Cloud |
 | **Linux** | `Speaking-AI-Professor-*-Linux-x64.AppImage` | Executable AppImage · Built-in PDF.js engine · Ollama $0 + Gemini Cloud |
-| **Android (Phone & Tablet)** | `Speaking-AI-Professor-*-Android.apk` | Direct APK install · Built-in PDF.js + 12-template chalkboard · Native Android TTS · **Gemini Cloud-only** (zero local models to protect phone battery & RAM) |
+| **Android (Phone & Tablet)** | `Speaking-AI-Professor-*-Android.apk` | Direct APK install · Built-in PDF.js + 14-template domain-adaptive chalkboard · Native Android TTS · **Gemini Cloud-only** (zero local models to protect phone battery & RAM) |
 
 > **AI Engine**: Install [**Ollama**](https://ollama.com/download) for **100% local $0** classes (recommended on PC/Mac), or paste a free [**Gemini API Key**](https://aistudio.google.com/apikey) inside **Ajustes** for instant cloud classes.
 

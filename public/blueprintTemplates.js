@@ -1372,8 +1372,8 @@ function layersXyGraph(spec = {}, prefix = 'bp') {
 }
 
 function layersComparison(spec = {}, prefix = 'bp') {
-  const left = spec.left || { title: 'Vehículo de calle', color: 'amber', points: ['Confort prioritario', 'Compromisos geométricos'] };
-  const right = spec.right || { title: 'Vehículo de competición', color: 'emerald', points: ['Rendimiento y control puro', 'Minimizar ΔF_z en ruedas'] };
+  const left = spec.left || { title: 'Concepto A', color: 'amber', points: ['Característica principal', 'Contexto de aplicación'] };
+  const right = spec.right || { title: 'Concepto B', color: 'emerald', points: ['Rasgo diferenciador', 'Consecuencia clave'] };
   const lCol = PAL[String(left.color || '').toLowerCase()] ? String(left.color).toLowerCase() : 'amber';
   const rCol = PAL[String(right.color || '').toLowerCase()] ? String(right.color).toLowerCase() : 'emerald';
   const lp = palOf(lCol);
@@ -1414,19 +1414,178 @@ function layersComparison(spec = {}, prefix = 'bp') {
   return { left: leftLayer, right: rightLayer, takeaway };
 }
 
+// Universal Radial Concept Map (Literature, History, Medicine, Law, Philosophy, CS, Economics, Science)
+function layersConceptMap(spec = {}, prefix = 'bp') {
+  const placer = createPlacer();
+  const centerObj = typeof spec.center === 'string'
+    ? { title: spec.center, subtitle: '' }
+    : spec.center || { title: spec.title || 'Idea central', subtitle: '' };
+
+  const rawNodes = Array.isArray(spec.nodes) && spec.nodes.length
+    ? spec.nodes
+    : [
+        { title: 'Idea clave 1', detail: 'Relación principal con el tema', color: 'cyan' },
+        { title: 'Idea clave 2', detail: 'Contexto o causa directa', color: 'amber' },
+        { title: 'Idea clave 3', detail: 'Significado o consecuencia', color: 'emerald' },
+      ];
+  const nodes = rawNodes.slice(0, 4);
+  const defaultColors = ['cyan', 'amber', 'emerald', 'rose'];
+
+  // Clean 4-quadrant slots around the central hub (strict zero-overlap geometry on 960×540)
+  const slots = nodes.length === 2
+    ? [
+        { x: 56, y: 186, w: 258, h: 126, ax: 314, ay: 249, cx: 368, cy: 249 },
+        { x: 646, y: 186, w: 258, h: 126, ax: 646, ay: 249, cx: 592, cy: 249 },
+      ]
+    : nodes.length === 3
+      ? [
+          { x: 52, y: 84, w: 268, h: 132, ax: 320, ay: 158, cx: 382, cy: 224 },
+          { x: 640, y: 84, w: 268, h: 132, ax: 640, ay: 158, cx: 578, cy: 224 },
+          { x: 322, y: 332, w: 316, h: 112, ax: 480, ay: 332, cx: 480, cy: 294 },
+        ]
+      : [
+          { x: 46, y: 78, w: 278, h: 134, ax: 324, ay: 152, cx: 382, cy: 222 },
+          { x: 636, y: 78, w: 278, h: 134, ax: 636, ay: 152, cx: 578, cy: 222 },
+          { x: 46, y: 298, w: 278, h: 134, ax: 324, ay: 356, cx: 382, cy: 282 },
+          { x: 636, y: 298, w: 278, h: 134, ax: 636, ay: 356, cx: 578, cy: 282 },
+        ];
+
+  const cLines = wrapLines(String(centerObj.title || 'Idea central'), 19).slice(0, 2);
+  const cSub = centerObj.subtitle ? wrapLines(String(centerObj.subtitle), 24).slice(0, 1)[0] : '';
+  const centerLayer = `
+    <g>
+      <rect x="368" y="196" width="224" height="106" rx="18" fill="url(#${prefix}-car-cyan)" stroke="#38bdf8" stroke-width="2.6" filter="url(#${prefix}-glow)" data-pen="1" data-pen-color="#38bdf8" />
+      ${cLines
+        .map(
+          (ln, i) =>
+            `<text x="480" y="${(cLines.length === 1 ? 248 : 236) + i * 22}" text-anchor="middle" fill="#f8fafc" font-size="16" font-weight="700" font-family="-apple-system, sans-serif">${esc(ln)}</text>`,
+        )
+        .join('')}
+      ${cSub ? `<text x="480" y="284" text-anchor="middle" fill="#7dd3fc" font-size="11.5" font-weight="600" font-family="-apple-system, sans-serif">${esc(cSub)}</text>` : ''}
+    </g>
+  `;
+
+  const nodesLayer = nodes
+    .map((nd, idx) => {
+      const sl = slots[idx];
+      const col = PAL[String(nd?.color || '').toLowerCase()]
+        ? String(nd.color).toLowerCase()
+        : defaultColors[idx % defaultColors.length];
+      const p = palOf(col);
+      const tLines = wrapLines(String(nd?.title || nd?.label || `Punto ${idx + 1}`), 26).slice(0, 2);
+      const dLines = wrapLines(String(nd?.detail || nd?.text || ''), 31).slice(0, 3);
+      const midX = (sl.cx + sl.ax) / 2;
+      return `
+        <g>
+          <path d="M ${sl.cx} ${sl.cy} Q ${midX} ${sl.cy}, ${sl.ax} ${sl.ay}" fill="none" stroke="${p.stroke}" stroke-width="2.2" stroke-dasharray="5 4" opacity="0.82" data-pen="1" data-pen-color="${p.stroke}" />
+          <circle cx="${sl.ax}" cy="${sl.ay}" r="4.5" fill="${p.stroke}" />
+          <rect x="${sl.x}" y="${sl.y}" width="${sl.w}" height="${sl.h}" rx="12" fill="url(#${prefix}-car-${col === 'slate' ? 'cyan' : col})" stroke="${p.stroke}" stroke-width="2" data-pen="1" data-pen-color="${p.stroke}" />
+          ${tLines
+            .map(
+              (ln, i) =>
+                `<text x="${sl.x + 16}" y="${sl.y + 28 + i * 19}" fill="${p.text}" font-size="14.5" font-weight="700" font-family="-apple-system, sans-serif">${esc(ln)}</text>`,
+            )
+            .join('')}
+          ${dLines
+            .map(
+              (ln, i) =>
+                `<text x="${sl.x + 16}" y="${sl.y + (tLines.length > 1 ? 72 : 56) + i * 17}" fill="#e2e8f0" font-size="12.5" font-family="-apple-system, sans-serif">${esc(ln)}</text>`,
+            )
+            .join('')}
+        </g>
+      `;
+    })
+    .join('\n');
+
+  const takeaway = spec.takeaway ? placer.pill(480, 492, spec.takeaway, 'emerald', { fontSize: 12.5, maxLen: 68 }) : '';
+  return { center: centerLayer, nodes: nodesLayer, takeaway };
+}
+
+// Universal Sequential Timeline / Narrative Arc / Process Flow (Any Subject)
+function layersTimelineFlow(spec = {}, prefix = 'bp') {
+  const placer = createPlacer();
+  const rawSteps = Array.isArray(spec.steps) && spec.steps.length
+    ? spec.steps
+    : [
+        { badge: '1', title: 'Inicio / Planteamiento', detail: 'Contexto inicial', color: 'cyan' },
+        { badge: '2', title: 'Desarrollo', detail: 'Transformación clave', color: 'amber' },
+        { badge: '3', title: 'Desenlace / Clave', detail: 'Resultado o aprendizaje', color: 'emerald' },
+      ];
+  const steps = rawSteps.slice(0, 4);
+  const colors = ['cyan', 'amber', 'emerald', 'rose'];
+
+  const count = steps.length;
+  const marginX = 48;
+  const gap = 24;
+  const cardW = Math.floor((960 - marginX * 2 - gap * (count - 1)) / count);
+  const cardY = 148;
+  const cardH = 250;
+  const railY = 104;
+
+  const base = `
+    <line x1="${marginX + 20}" y1="${railY}" x2="${960 - marginX - 20}" y2="${railY}" stroke="#475569" stroke-width="3" stroke-linecap="round" data-pen="1" data-pen-color="#38bdf8" />
+  `;
+
+  const stepsLayer = steps
+    .map((st, idx) => {
+      const x = marginX + idx * (cardW + gap);
+      const cx = x + cardW / 2;
+      const col = PAL[String(st?.color || '').toLowerCase()]
+        ? String(st.color).toLowerCase()
+        : colors[idx % colors.length];
+      const p = palOf(col);
+      const badgeTxt = String(st?.badge || `${idx + 1}`).slice(0, 12);
+      const maxChars = Math.max(16, Math.floor((cardW - 28) / 7.5));
+      const tLines = wrapLines(String(st?.title || `Paso ${idx + 1}`), Math.max(14, maxChars - 2)).slice(0, 2);
+      const dLines = wrapLines(String(st?.detail || st?.text || ''), maxChars).slice(0, 5);
+      const arrow =
+        idx < count - 1
+          ? `<path d="M ${x + cardW + 3} ${cardY + cardH / 2} L ${x + cardW + gap - 4} ${cardY + cardH / 2}" stroke="#38bdf8" stroke-width="2.4" marker-end="url(#${prefix}-arr-cyan)" data-pen="1" data-pen-color="#38bdf8" />`
+          : '';
+      return `
+        <g>
+          <circle cx="${cx}" cy="${railY}" r="16" fill="#0f172a" stroke="${p.stroke}" stroke-width="2.6" />
+          <text x="${cx}" y="${railY + 5}" text-anchor="middle" fill="${p.text}" font-size="12" font-weight="700" font-family="ui-monospace, monospace">${esc(badgeTxt)}</text>
+          <line x1="${cx}" y1="${railY + 16}" x2="${cx}" y2="${cardY}" stroke="${p.stroke}" stroke-width="1.6" stroke-dasharray="4 3" opacity="0.7" />
+          <rect x="${x}" y="${cardY}" width="${cardW}" height="${cardH}" rx="12" fill="url(#${prefix}-car-${col === 'slate' ? 'cyan' : col})" stroke="${p.stroke}" stroke-width="2" data-pen="1" data-pen-color="${p.stroke}" />
+          ${tLines
+            .map(
+              (ln, i) =>
+                `<text x="${x + 15}" y="${cardY + 34 + i * 20}" fill="${p.text}" font-size="14.5" font-weight="700" font-family="-apple-system, sans-serif">${esc(ln)}</text>`,
+            )
+            .join('')}
+          <line x1="${x + 14}" y1="${cardY + (tLines.length > 1 ? 66 : 48)}" x2="${x + cardW - 14}" y2="${cardY + (tLines.length > 1 ? 66 : 48)}" stroke="${p.stroke}" stroke-width="1" opacity="0.28" />
+          ${dLines
+            .map(
+              (ln, i) =>
+                `<text x="${x + 15}" y="${cardY + (tLines.length > 1 ? 92 : 76) + i * 20}" fill="#e2e8f0" font-size="12.5" font-family="-apple-system, sans-serif">${esc(ln)}</text>`,
+            )
+            .join('')}
+          ${arrow}
+        </g>
+      `;
+    })
+    .join('\n');
+
+  const takeaway = spec.takeaway ? placer.pill(480, 476, spec.takeaway, 'cyan', { fontSize: 12.5, maxLen: 68 }) : '';
+  return { base, steps: stepsLayer, takeaway };
+}
+
 export const BLUEPRINT_TEMPLATES = {
+  concept_map: { fn: layersConceptMap, defaultOrder: ['center', 'nodes', 'takeaway'] },
+  timeline_flow: { fn: layersTimelineFlow, defaultOrder: ['base', 'steps', 'takeaway'] },
+  comparison: { fn: layersComparison, defaultOrder: ['left', 'right', 'takeaway'] },
+  xy_graph: { fn: layersXyGraph, defaultOrder: ['base', 'curve1', 'curve2'] },
+  force_balance: { fn: layersForceBalance, defaultOrder: ['base', 'forces', 'result'] },
+  inertia_body: { fn: layersInertiaBody, defaultOrder: ['base', 'axes', 'dimensions', 'callout', 'moment'] },
   car_side: { fn: layersCarSide, defaultOrder: ['base', 'dimensions', 'cg', 'loads', 'forces', 'moment'] },
   car_top: { fn: layersCarTop, defaultOrder: ['base', 'dimensions', 'cg', 'forces', 'moment'] },
   car_front: { fn: layersCarFront, defaultOrder: ['base', 'dimensions', 'cg', 'loads', 'forces', 'moment'] },
   quarter_car: { fn: layersQuarterCar, defaultOrder: ['base', 'suspension', 'dimensions', 'forces'] },
-  force_balance: { fn: layersForceBalance, defaultOrder: ['base', 'forces', 'result'] },
   power_balance: { fn: layersPowerBalance, defaultOrder: ['base', 'resistances', 'traction', 'vmax'] },
   tire_load_curve: { fn: layersTireLoadCurve, defaultOrder: ['base', 'curve', 'transfer'] },
   tire_slip_curve: { fn: layersTireSlipCurve, defaultOrder: ['base', 'curve', 'compare'] },
   friction_circle: { fn: layersFrictionCircle, defaultOrder: ['base', 'vectors', 'compare'] },
-  inertia_body: { fn: layersInertiaBody, defaultOrder: ['base', 'axes', 'dimensions', 'callout', 'moment'] },
-  xy_graph: { fn: layersXyGraph, defaultOrder: ['base', 'curve1', 'curve2'] },
-  comparison: { fn: layersComparison, defaultOrder: ['left', 'right', 'takeaway'] },
 };
 
 export function normalizeTemplateLayers(templateName, requestedLayers, spec = {}) {

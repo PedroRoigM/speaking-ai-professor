@@ -103,7 +103,7 @@ await check('Verificador Matemático Python (auto-captura de variables)', async 
   return res.result;
 });
 
-await check('12 Plantillas Esquemáticas + Cero Solapes + Cero Gráficas Vacías', () => {
+await check('14 Plantillas Esquemáticas (4 Universales + 10 Ingeniería) + Guardarraíl Anti-Coches en Otros Temas', async () => {
   for (const [name, entry] of Object.entries(BLUEPRINT_TEMPLATES)) {
     const svg = buildParametricBlueprintSvg(`Check ${name}`, name, { xMin: 0, xMax: 200, yMin: 0, yMax: 3000 }, entry.defaultOrder);
     assert.ok(svg.includes('<svg viewBox="0 0 960 540"'), `Plantilla ${name} inválida`);
@@ -113,7 +113,31 @@ await check('12 Plantillas Esquemáticas + Cero Solapes + Cero Gráficas Vacías
   }
   const eq = renderMathExpressionHtml('P = (1/2 · ρ · V^3 · C_d · A + m · g · V · (C_r + sen α)) / 736');
   assert.ok(eq.includes('<span class="frac">'), 'Fórmula no compiló fracción vertical');
-  return `${Object.keys(BLUEPRINT_TEMPLATES).length}/12 plantillas + compilador matemático OK`;
+
+  // Regression check: "El Principito.pdf" must ALWAYS classify as 'general' (even inside an engineering folder!)
+  // and any accidental vehicle template MUST be blocked/converted to concept_map!
+  const { detectLessonDomain, sanitizeBoardForDomain } = await importLocal('lib', 'classTimeline.mjs');
+  const litDomain = detectLessonDomain({
+    fileName: 'El_Principito.pdf',
+    text: 'Cuando yo tenía seis años vi una vez una lámina magnífica en un libro sobre el bosque virgen que se llamaba Historias vividas. Representaba una serpiente boa que se tragaba a una fiera.',
+    folderName: 'Dinámica de vehículos de competición',
+  });
+  assert.strictEqual(litDomain, 'general', `El Principito se clasificó mal como: ${litDomain}`);
+  const blockedCar = sanitizeBoardForDomain(
+    { action: 'new', template: 'car_side', title: 'La boa y el sombrero', note: 'La imaginación infantil frente a la mirada adulta' },
+    litDomain,
+    'El Principito',
+  );
+  assert.strictEqual(blockedCar.template, 'concept_map', `No bloqueó car_side en El Principito: ${blockedCar.template}`);
+
+  const vehDomain = detectLessonDomain({
+    fileName: 'Tema3_Neumaticos.pdf',
+    text: 'Sensibilidad a la carga vertical del neumático en vehículos de competición: coeficiente de adherencia μ frente a F_z.',
+    folderName: 'Apuntes',
+  });
+  assert.strictEqual(vehDomain, 'vehicle', `Tema de neumáticos no detectado como vehicle: ${vehDomain}`);
+
+  return `${Object.keys(BLUEPRINT_TEMPLATES).length}/14 plantillas + El Principito=general (0 coches) + Vehículos=vehicle OK`;
 });
 
 await check('Watchdog Anti-Bloqueo + Self-Heal de Cola (Simulación de bloqueo en Pág. 8)', async () => {

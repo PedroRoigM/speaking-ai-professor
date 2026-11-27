@@ -434,6 +434,12 @@ function renderChalkboard(board) {
     state.activeBoard = {
       ...state.activeBoard,
       layers: [...mergedLayers],
+      center: board.center || state.activeBoard.center || null,
+      nodes: board.nodes || state.activeBoard.nodes || null,
+      steps: board.steps || state.activeBoard.steps || null,
+      left: board.left || state.activeBoard.left || null,
+      right: board.right || state.activeBoard.right || null,
+      takeaway: board.takeaway || state.activeBoard.takeaway || '',
       formula: board.formula || state.activeBoard.formula || '',
       note: board.note || state.activeBoard.note || '',
     };
@@ -446,6 +452,9 @@ function renderChalkboard(board) {
       xLabel: board.xLabel || '',
       yLabel: board.yLabel || '',
       curves: board.curves || null,
+      center: board.center || null,
+      nodes: board.nodes || null,
+      steps: board.steps || null,
       left: board.left || null,
       right: board.right || null,
       takeaway: board.takeaway || '',
@@ -475,32 +484,81 @@ function renderChalkboard(board) {
   }
 }
 
+// ---------------- Domain-Adaptive Guardrails (Zero Off-Topic Car Drawings!) ----------------
+const UNIVERSAL_TEMPLATES = new Set(['concept_map', 'timeline_flow', 'comparison', 'xy_graph']);
+const PHYSICS_ONLY_TEMPLATES = new Set(['force_balance', 'inertia_body']);
+const VEHICLE_DOMAIN_RE =
+  /\b(veh[ií]cul\w*|neum[aá]tic\w*|suspensi[oó]n\w*|chasis|aerodin[aá]mic\w*|downforce|batalla|gui[ñn]ada|balanceo|cabeceo|pacejka|ackermann|camber|oversteer|understeer|motorsport|automovil\w*|din[aá]mica\s+(?:de\s+)?veh|gt3|roll\s*center|slip\s*angle|friction\s*circle|quarter\s*car)\b/i;
+const PHYSICS_DOMAIN_RE =
+  /\b(fuerza\s+neta|ley\s+de\s+newton|aceleraci[oó]n|momento\s+de\s+inercia|teorema\s+de\s+steiner|torque|energ[ií]a\s+cin[eé]tica|rozamiento|fricci[oó]n|plano\s+inclinado|cinem[aá]tica|din[aá]mica|termodin[aá]mica|mec[aá]nica\s+cl[aá]sica)\b/i;
+
+function detectMobileDomain(fileName, text) {
+  const probe = `${fileName || ''}\n${text || ''}`;
+  if (VEHICLE_DOMAIN_RE.test(probe)) return 'vehicle';
+  if (PHYSICS_DOMAIN_RE.test(probe)) return 'physics';
+  return 'general';
+}
+
+function sanitizeMobileBoard(board, domain, fallbackTitle) {
+  if (!board || typeof board !== 'object' || board.action === 'none') return board;
+  const tpl = String(board.template || '').toLowerCase().trim();
+  if (!tpl) return board;
+  const allowed =
+    UNIVERSAL_TEMPLATES.has(tpl) ||
+    domain === 'vehicle' ||
+    (domain === 'physics' && PHYSICS_ONLY_TEMPLATES.has(tpl));
+  if (allowed) return board;
+  const title = String(board.title || fallbackTitle || 'Ideas clave').trim();
+  const note = String(board.note || '').trim();
+  return {
+    ...board,
+    template: 'concept_map',
+    layers: ['center', 'nodes', ...(note ? ['takeaway'] : [])],
+    center: { title: title.slice(0, 42), subtitle: '' },
+    nodes: [
+      { title: 'Idea clave', detail: (note || title).slice(0, 84), color: 'cyan' },
+      { title: 'Contexto del pasaje', detail: title.slice(0, 84), color: 'amber' },
+    ],
+    takeaway: note.slice(0, 68),
+  };
+}
+
 // ---------------- Cloud-Only Gemini Interactions API Client ----------------
-const CLASS_SYSTEM_PROMPT_ES = `Eres un Profesor Catedrático universitario impartiendo una clase magistral viva en un AULA DE DOBLE PANTALLA (PDF + Pizarra vectorial).
-Elige UNA de las 12 plantillas paramétricas en "board.template" (o "action":"none" si es una portada pura) y revela capas progresivamente ("action":"new" con "layers" -> beats siguientes "action":"append" con "add_layers"):
-1. "car_side" (mode: "static"|"braking"|"accelerating"|"aero"; layers: base, dimensions, cg, loads, forces, moment)
-2. "car_top" (mode: "dimensions"|"cornering"|"yaw"|"ackermann"; layers: base, dimensions, cg, forces, moment)
-3. "car_front" (mode: "static"|"cornering"|"camber"|"roll_center"; layers: base, dimensions, cg, loads, forces, moment)
-4. "quarter_car" (layers: base, suspension, dimensions, forces)
-5. "force_balance" (mode: "horizontal"|"incline"; layers: base, forces, result)
-6. "power_balance" (layers: base, resistances, traction, vmax)
-7. "tire_load_curve" (mode: "mu_vs_fz"|"fy_vs_fz"; layers: base, curve, transfer)
-8. "tire_slip_curve" (layers: base, curve, compare)
-9. "friction_circle" (layers: base, vectors, compare)
-10. "inertia_body" (mode: "steiner"|"car_axes"; layers: base, axes, dimensions, callout)
-11. "xy_graph" (xLabel, yLabel, curves:[{shape:"quadratic"|"cubic"|"linear"|"linear_down"|"constant"|"constant_high"|"inverse"|"concave"|"peak"|"exponential"|"decay", color:"cyan", label:"..."}], layers: base, curve1, curve2)
-12. "comparison" (left:{title,color,points:[...]}, right:{title,color,points:[...]}, takeaway, layers: left, right, takeaway)
-
+const GENERAL_PROMPT_ES = `Eres un Profesor Catedrático universitario apasionado y claro dando clase en un AULA DE DOBLE PANTALLA (adapta tu tono 100 % a la materia real del documento: literatura, historia, biología, medicina, derecho, economía, filosofía, etc.).
+Elige ÚNICAMENTE UNA de estas 4 plantillas universales en "board.template" (o "action":"none" si es portada pura):
+1. "concept_map" -> MAPA CONCEPTUAL RADIAL: center:{title,subtitle}, nodes:[{title,detail,color:"cyan"|"amber"|"emerald"|"rose"}] (2-4 nodos), takeaway (layers: center, nodes, takeaway)
+2. "timeline_flow" -> LÍNEA TEMPORAL / SECUENCIA: steps:[{badge,title,detail,color}] (3-4 pasos), takeaway (layers: base, steps, takeaway)
+3. "comparison" -> COMPARATIVA 2 COLUMNAS: left:{title,color,points:[...]}, right:{title,color,points:[...]}, takeaway (layers: left, right, takeaway)
+4. "xy_graph" -> GRÁFICA X-Y (SOLO si la página tiene una gráfica cuantitativa real)
 REGLAS ESTRICTAS:
-- Fidelidad total a ESTA diapositiva: no inventes fórmulas que no aparezcan; usa Unicode limpio en "formula" (sin LaTeX).
-- Construye 3 beats ricos y naturales (2-3 frases habladas claras en español natural en "say", sin Markdown ni coletillas repetitivas).
+- Fidelidad absoluta a ESTA página: JAMÁS metas ejemplos de coches, competición ni temas ajenos al PDF. Deja "formula":"" si no hay ecuación.
+- Construye 3 beats naturales (2-3 frases habladas en español en "say", cero Markdown, cero coletillas).
 - Devuelve ÚNICAMENTE JSON válido:
+{"beats":[{"say":"...","board":{"action":"new","template":"concept_map","title":"...","layers":["center","nodes"],"center":{"title":"...","subtitle":""},"nodes":[{"title":"...","detail":"...","color":"cyan"},{"title":"...","detail":"...","color":"amber"}],"takeaway":"...","formula":"","note":"..."}}]}`;
+
+const GENERAL_PROMPT_EN = `You are an engaging university professor teaching live in a DUAL-SCREEN CLASSROOM (adapt 100% to the document's real subject: literature, history, medicine, law, biology, economics, CS, etc.).
+Pick ONLY ONE of these 4 universal templates in "board.template" (or "action":"none" for bare covers):
+1. "concept_map" (center:{title,subtitle}, nodes:[{title,detail,color}], takeaway; layers: center, nodes, takeaway)
+2. "timeline_flow" (steps:[{badge,title,detail,color}], takeaway; layers: base, steps, takeaway)
+3. "comparison" (left:{title,color,points:[...]}, right:{title,color,points:[...]}, takeaway; layers: left, right, takeaway)
+4. "xy_graph" (ONLY if the slide contains a real quantitative graph)
+Stay 100% faithful to THIS page — NEVER introduce unrelated topics (like cars or physics). Return ONLY valid JSON with 3 spoken beats:
+{"beats":[{"say":"...","board":{"action":"new","template":"concept_map","title":"...","layers":["center","nodes"],"center":{"title":"...","subtitle":""},"nodes":[{"title":"...","detail":"...","color":"cyan"}],"takeaway":"...","formula":"","note":"..."}}]}`;
+
+const VEHICLE_PROMPT_ES = `Eres un Profesor Catedrático especialista en Dinámica de Vehículos e Ingeniería dando clase en un AULA DE DOBLE PANTALLA (PDF + Pizarra vectorial).
+Elige UNA plantilla en "board.template" (car_side, car_top, car_front, quarter_car, force_balance, power_balance, tire_load_curve, tire_slip_curve, friction_circle, inertia_body, xy_graph, comparison, concept_map, timeline_flow; o "action":"none" en portadas) y revela capas progresivamente en 3 beats hablados claros en español (sin Markdown, Unicode limpio en "formula").
+Devuelve ÚNICAMENTE JSON válido:
 {"beats":[{"say":"...","board":{"action":"new","template":"xy_graph","title":"...","layers":["base","curve1"],"formula":"","note":"..."}}]}`;
 
-const CLASS_SYSTEM_PROMPT_EN = `You are a brilliant university professor teaching live in a DUAL-SCREEN CLASSROOM (PDF + Parametric SVG Chalkboard).
-Pick ONE of the 12 parametric templates in "board.template" (car_side, car_top, car_front, quarter_car, force_balance, power_balance, tire_load_curve, tire_slip_curve, friction_circle, inertia_body, xy_graph, comparison) and reveal layers progressively across 3 rich spoken beats (2-3 natural sentences each in "say", no Markdown, clean Unicode in "formula").
-Stay 100% faithful to THIS slide. Return ONLY valid JSON:
+const VEHICLE_PROMPT_EN = `You are a senior university professor of Vehicle Dynamics & Engineering teaching live in a DUAL-SCREEN CLASSROOM.
+Pick ONE template in "board.template" (car_side, car_top, car_front, quarter_car, force_balance, power_balance, tire_load_curve, tire_slip_curve, friction_circle, inertia_body, xy_graph, comparison, concept_map, timeline_flow) across 3 rich spoken beats (no Markdown, clean Unicode in "formula").
+Return ONLY valid JSON:
 {"beats":[{"say":"...","board":{"action":"new","template":"xy_graph","title":"...","layers":["base","curve1"],"formula":"","note":"..."}}]}`;
+
+function getMobileClassPrompt(domain, isEn) {
+  if (domain === 'vehicle') return isEn ? VEHICLE_PROMPT_EN : VEHICLE_PROMPT_ES;
+  return isEn ? GENERAL_PROMPT_EN : GENERAL_PROMPT_ES;
+}
 
 function extractJsonObject(raw) {
   const s = String(raw || '').trim();
@@ -602,18 +660,24 @@ async function generatePageLessonPlan(pageNum) {
   const task = (async () => {
     const ctx = await extractPdfPageContext(pageNum);
     const isEn = state.settings.language === 'en';
+    const domain = detectMobileDomain(state.pdfName, ctx.text);
     const promptText = isEn
       ? `Document: "${state.pdfName || 'Study Notes'}" — Page ${pageNum} of ${state.totalPages}.\nSlide text:\n${ctx.text.slice(0, 2800) || '(Visual/diagram slide — inspect the attached image closely)'}\nTeach this page clearly in 3 synchronized beats.`
       : `Documento: "${state.pdfName || 'Apuntes'}" — Página ${pageNum} de ${state.totalPages}.\nTexto de la diapositiva:\n${ctx.text.slice(0, 2800) || '(Diapositiva visual o gráfica — analiza la imagen adjunta con precisión)'}\nExplica esta página con claridad y profundidad en 3 beats sincronizados.`;
 
     const { text } = await callGeminiCloud({
-      systemInstruction: isEn ? CLASS_SYSTEM_PROMPT_EN : CLASS_SYSTEM_PROMPT_ES,
+      systemInstruction: getMobileClassPrompt(domain, isEn),
       promptText,
       imageB64: ctx.imageB64,
       expectJson: true,
     });
     const parsed = extractJsonObject(text);
-    const beats = Array.isArray(parsed?.beats) ? parsed.beats.filter((b) => b && b.say) : [];
+    const beats = (Array.isArray(parsed?.beats) ? parsed.beats : [])
+      .filter((b) => b && b.say)
+      .map((b) => ({
+        ...b,
+        board: sanitizeMobileBoard(b.board, domain, state.pdfName),
+      }));
     if (!beats.length) throw new Error('Sin bloques de explicación generados');
     state.pagePlanCache.set(pageNum, beats);
     return beats;
@@ -781,8 +845,9 @@ async function askProfessorQuestion(question) {
       expectJson: true,
     });
     const parsed = extractJsonObject(text);
+    const qaDomain = detectMobileDomain(state.pdfName, state.currentPageText);
     if (parsed?.board && parsed.board.template) {
-      renderChalkboard(parsed.board);
+      renderChalkboard(sanitizeMobileBoard(parsed.board, qaDomain, state.pdfName));
     }
     const answer = parsed?.say || text;
     setCaption('Profesor', answer);
