@@ -371,7 +371,7 @@ await check('Desktop Zero-Dependencies: JS Math Verifier + PDF.js Fallback + Ele
   }
 
   // 4. Verify Electron shell files syntax, RAM-based default local model selector & GitHub Release auto-updater
-  for (const rel of ['electron/main.mjs', 'electron/preload.cjs', 'electron/updater.mjs']) {
+  for (const rel of ['electron/main.mjs', 'electron/preload.cjs', 'electron/updater.mjs', 'electron/afterPack.cjs']) {
     execFileSync(process.execPath, ['--check', path.join(APP_DIR, rel)], { stdio: 'pipe' });
   }
   const { getRecommendedDefaultModel } = await importLocal('lib', 'localProvisioner.mjs');

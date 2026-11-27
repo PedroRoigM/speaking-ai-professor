@@ -1,6 +1,6 @@
 {
   "name": "speaking-ai-professor-mobile",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "description": "Cloud-only Android APK for Speaking AI Professor (PDF.js + 12-template animated chalkboard + Gemini Cloud + Native Android TTS, zero local models).",
   "scripts": {
